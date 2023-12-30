@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "multiwebcam"
+version = "0.1.0"
+description = "Record synchronized webcam footage"
+authors = ["Mac Prible <prible@gmail.com>"]
+license = "LGPLv3"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python =  ">=3.10,<3.13"
+PySide6 = "^6.6.1"
+opencv-contrib-python = "^4.8.1.78"
+rtoml = "^0.9.0"
+pandas = "^2.1.4"
+
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.28.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+mwc = "multiwebcam.__main__:CLI_parser"
