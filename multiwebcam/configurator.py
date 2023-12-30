@@ -50,7 +50,7 @@ class Configurator:
     def get_camera_count(self):
         return self.dict["camera_count"]
 
-    def get_fps_recording(self):
+    def get_fps_target(self):
         return self.dict["fps"]
 
     def save_fps(self,fps_target):

@@ -58,7 +58,7 @@ class MultiCameraWidget(QWidget):
         self.thumbnail_emitter.start()
 
         self.frame_rate_spin = QSpinBox()
-        self.frame_rate_spin.setValue(self.session.fps_recording)
+        self.frame_rate_spin.setValue(self.session.fps_target)
 
         self.next_action = NextRecordingActions.StartRecording
         self.start_stop = QPushButton(self.next_action.value)
@@ -158,6 +158,7 @@ class MultiCameraWidget(QWidget):
         self.frame_rate_spin.valueChanged.connect(self.session.set_fps)
         self.thumbnail_emitter.dropped_fps.connect(self.update_dropped_fps)
         self.start_stop.clicked.connect(self.toggle_start_stop)
+        self.session.qt_signaler.fps_target_updated.connect(self.update_fps_target)
         self.session.qt_signaler.recording_complete_signal.connect(
             self.on_recording_complete
         )
@@ -207,6 +208,9 @@ class MultiCameraWidget(QWidget):
             f"Successfully reset text and renamed recording directory to {next_recording}"
         )
         # pass
+
+    def update_fps_target(self):
+        self.frame_rate_spin.setValue(self.stream.fps_target)
 
     @Slot(dict)
     def update_dropped_fps(self, dropped_fps: dict):
