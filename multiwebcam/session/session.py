@@ -32,9 +32,9 @@ class SessionMode(Enum):
 class QtSignaler(QObject):
     stream_tools_loaded_signal = Signal()
     stream_tools_disconnected_signal = Signal()
-    unlock_postprocessing = Signal()
     recording_complete_signal = Signal()
     mode_change_success = Signal()
+    fps_target_updated = Signal()
 
     def __init__(self) -> None:
         super(QtSignaler, self).__init__()
@@ -57,7 +57,7 @@ class LiveSession:
         self.stream_tools_loaded = False
 
         # load fps for various modes
-        self.fps_recording = self.config.get_fps_recording()
+        self.fps_target = self.config.get_fps_target()
         self.is_recording = False
 
         self.mode = None  # default mode of session
@@ -121,11 +121,14 @@ class LiveSession:
         self.qt_signaler.mode_change_success.emit()
 
     def set_fps(self, fps_target: int):
+        self.fps_target = fps_target
         logger.info( f"Updating streams fps to {fps_target} ")
         for stream in self.streams.values():
             stream.set_fps_target(fps_target)
         self.config.save_fps(fps_target)
-
+        
+        # signal to all camera config dialogues to update their fps target spin boxes
+        self.qt_signaler.fps_target_updated.emit()
 
 
     def get_configured_camera_count(self):

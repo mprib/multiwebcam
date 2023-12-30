@@ -54,30 +54,28 @@ class CameraConfigTab(QDialog):
         self.setWindowTitle("Camera Configuration and Calibration")
         self.setContentsMargins(0, 0, 0, 0)
 
-
         self.basic_frame_control = FrameControlWidget( self.session, self.port)
-
 
         logger.debug("Building FPS Control")
         self.frame_rate_spin = QSpinBox()
-        self.frame_rate_spin.setValue(self.stream.fps_target)
+        self.update_fps_target()
         self.fps_display = QLabel()
         self.ignore_box = QCheckBox()
 
         self.place_widgets()
         self.connect_widgets()
 
-    def toggle_advanced_controls(self):
-        if self.advanced_controls_toggle.isChecked():
-            self.advanced_controls.show()
-        else:
-            self.advanced_controls.hide()
 
+    def update_fps_target(self):
+        self.frame_rate_spin.setValue(self.stream.fps_target)
+        
+        
     def connect_widgets(self):
         self.frame_rate_spin.valueChanged.connect(self.on_frame_rate_spin)
         self.frame_emitter.FPSBroadcast.connect(self.FPSUpdateSlot)
         self.frame_emitter.ImageBroadcast.connect(self.image_update)
         self.ignore_box.stateChanged.connect(self.ignore_cam)
+        self.session.qt_signaler.fps_target_updated.connect(self.update_fps_target)
 
     def place_widgets(self):
         self.setLayout(QVBoxLayout())
@@ -99,6 +97,7 @@ class CameraConfigTab(QDialog):
         self.fps_grp.layout().addWidget(self.frame_rate_spin)
         self.fps_grp.layout().addWidget(self.fps_display)
         self.layout().addWidget(self.fps_grp)
+        self.layout().addWidget(self.ignore_box)
 
     def save_camera(self):
         self.session.save_camera(self.port)
@@ -114,8 +113,8 @@ class CameraConfigTab(QDialog):
 
     def on_frame_rate_spin(self, fps_rate):
         self.session.set_fps(fps_rate)
-        logger.info(f"Changing monocalibrator frame rate for port{self.port}")
-
+        logger.info(f"Changing stream frame rate for port{self.port}")
+    
     def FPSUpdateSlot(self, fps):
         if self.stream.camera.capture.isOpened():
             # rounding to nearest integer should be close enough for our purposes
