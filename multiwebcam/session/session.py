@@ -188,7 +188,7 @@ class LiveSession:
                 pass  # only add if not added yet
             else:
                 logger.info(f"Loading Stream for port {port}")
-                stream = LiveStream(cam)
+                stream = LiveStream(cam,fps_target=self.fps_target)
                 self.streams[port] = stream
                 pixmap_edge_length = 500
                 frame_emitter = FrameEmitter(stream, pixmap_edge_length=pixmap_edge_length)

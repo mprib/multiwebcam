@@ -67,7 +67,7 @@ class CameraConfigTab(QDialog):
 
 
     def update_fps_target(self):
-        self.frame_rate_spin.setValue(self.stream.fps_target)
+        self.frame_rate_spin.setValue(self.session.fps_target)
         
         
     def connect_widgets(self):

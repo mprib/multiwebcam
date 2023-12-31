@@ -210,7 +210,7 @@ class MultiCameraWidget(QWidget):
         # pass
 
     def update_fps_target(self):
-        self.frame_rate_spin.setValue(self.stream.fps_target)
+        self.frame_rate_spin.setValue(self.session.fps_target)
 
     @Slot(dict)
     def update_dropped_fps(self, dropped_fps: dict):
