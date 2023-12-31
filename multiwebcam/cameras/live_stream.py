@@ -229,7 +229,6 @@ class LiveStream():
 
 if __name__ == "__main__":
     ports = [0]
-    # ports = [3]
 
     cams = []
     for port in ports:
