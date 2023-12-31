@@ -1,21 +1,3 @@
-# The purpose of this module is to create a class that will operate as an
-# interface for a given camera. It will  store data related to
-# a variety of camera specific variables and allow setting of these variables:
-#
-# - port
-#   - an integer for a live camera
-#   - note this is focused on live feeds...pre-recorded video doesn't need this
-# - cv2.VideoCapture object based on port
-# - Default Resolution
-# - list of possible resolutions
-# - exposure
-# - intrinsic camera properties (to be set following calibration/on load)
-#   - camera matrix
-#   - distortion parameters
-#
-# New camera configurations
-#%%
-
 import platform
 import time
 import os
@@ -33,24 +15,26 @@ class Camera:
 
     # https://docs.opencv.org/3.4/d4/d15/group__videoio__flags__base.html
     # see above for constants used to access properties
-    def __init__(self, port, verified_resolutions = None, connect_API = None):
+    def __init__(self, port, verified_resolutions = None, backend = None):
 
-        if connect_API is not None:
-            self.connect_API = connect_API
+        if backend is not None:
+            self.backend = backend
+            self.connect_API = CAMERA_BACKENDS[backend] 
         else:
             if os.name == 'nt': #windows
+                self.backend = "CAP_DSHOW"
                 self.connect_API = cv2.CAP_DSHOW
             else: # UNIX variant
+                self.backend = "CAP_ANY"
                 self.connect_API = cv2.CAP_ANY
 
         # check if source has a data feed before proceeding...if not it is
         # either in use or fake
-        logger.info(f"Attempting to connect video capture at port {port}")
+        logger.info(f"Attempting to connect video capture at port {port} with backend {self.backend} ({self.connect_API})")
         test_capture = cv2.VideoCapture(port,self.connect_API)
         for _ in range(0, TEST_FRAME_COUNT):
             good_read, frame = test_capture.read()
 
-            # pass # dealing with this in the else statemetn below...not a real camera
         if good_read:
             logger.info(f"Good read at port {port}...proceeding")
             self.port = port
@@ -198,41 +182,6 @@ class Camera:
     def connect(self):
         self.capture = cv2.VideoCapture(self.port, self.connect_API)
 
-    def calibration_summary(self):
-        # Calibration output presented in label on far right
-        grid_count = "Grid Count:\t" + str(self.grid_count)
-        size_text = "Resolution:\t" + str(self.size[0]) + "x" + str(self.size[1])
-
-        # only grab if they exist
-        if self.error and self.error != "NA":
-            error_text = f"Error:\t{round(self.error,3)} "
-            cam_matrix_text = "Camera Matrix:\n" + (
-                "\n".join(
-                    [
-                        "\t".join([str(round(float(cell), 1)) for cell in row])
-                        for row in self.matrix
-                    ]
-                )
-            )
-            distortion_text = "Distortion:\t" + ",".join(
-                [str(round(float(cell), 2)) for cell in self.distortions]
-            )
-
-            # print(self.camera_matrix)
-            summary = (
-                grid_count
-                + "\n\n"
-                + error_text
-                + "\n\n"
-                + size_text
-                + "\n\n"
-                + cam_matrix_text
-                + "\n\n"
-                + distortion_text
-            )
-            return summary
-        else:
-            return "No Calibration Stored"
 
 # common possibilities taken from https://en.wikipedia.org/wiki/List_of_common_resolutions
 RESOLUTIONS_TO_CHECK = [
@@ -260,6 +209,41 @@ RESOLUTIONS_TO_CHECK = [
     # (3840, 2160),
     # (7680, 4320),
 ]
+
+CAMERA_BACKENDS = {
+    "CAP_ANY": cv2.CAP_ANY,
+    "CAP_VFW": cv2.CAP_VFW,
+    "CAP_V4L": cv2.CAP_V4L,
+    "CAP_V4L2": cv2.CAP_V4L2,
+    "CAP_FIREWIRE": cv2.CAP_FIREWIRE,
+    "CAP_FIREWARE": cv2.CAP_FIREWARE,
+    "CAP_IEEE1394": cv2.CAP_IEEE1394,
+    "CAP_DC1394": cv2.CAP_DC1394,
+    "CAP_CMU1394": cv2.CAP_CMU1394,
+    "CAP_QT": cv2.CAP_QT,
+    "CAP_UNICAP": cv2.CAP_UNICAP,
+    "CAP_DSHOW": cv2.CAP_DSHOW,
+    "CAP_PVAPI": cv2.CAP_PVAPI,
+    "CAP_OPENNI": cv2.CAP_OPENNI,
+    "CAP_OPENNI_ASUS": cv2.CAP_OPENNI_ASUS,
+    "CAP_ANDROID": cv2.CAP_ANDROID,
+    "CAP_XIAPI": cv2.CAP_XIAPI,
+    "CAP_AVFOUNDATION": cv2.CAP_AVFOUNDATION,
+    "CAP_GIGANETIX": cv2.CAP_GIGANETIX,
+    "CAP_MSMF": cv2.CAP_MSMF,
+    "CAP_WINRT": cv2.CAP_WINRT,
+    "CAP_INTELPERC": cv2.CAP_INTELPERC,
+    "CAP_OPENNI2": cv2.CAP_OPENNI2,
+    "CAP_OPENNI2_ASUS": cv2.CAP_OPENNI2_ASUS,
+    "CAP_GPHOTO2": cv2.CAP_GPHOTO2,
+    "CAP_GSTREAMER": cv2.CAP_GSTREAMER,
+    "CAP_FFMPEG": cv2.CAP_FFMPEG,
+    "CAP_IMAGES": cv2.CAP_IMAGES,
+    "CAP_ARAVIS": cv2.CAP_ARAVIS,
+    "CAP_OPENCV_MJPEG": cv2.CAP_OPENCV_MJPEG,
+    "CAP_INTEL_MFX": cv2.CAP_INTEL_MFX,
+    "CAP_XINE": cv2.CAP_XINE
+}
 
 ######################### TEST FUNCTIONALITY OF CAMERAS ########################
 if __name__ == "__main__":
@@ -312,5 +296,3 @@ if __name__ == "__main__":
             cam.disconnect()
             cv2.destroyAllWindows()
             break 
-
-# %%

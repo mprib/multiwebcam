@@ -25,7 +25,7 @@ class FrameEmitter(QThread):
         # square to keep life simple.
         super(FrameEmitter, self).__init__()
         self.stream = stream
-        self.in_q = Queue()
+        self.in_q = Queue(1)
 
         logger.info(f"Frame emitter at port {self.stream.port} subscribing to stream")
         self.pixmap_edge_length = pixmap_edge_length

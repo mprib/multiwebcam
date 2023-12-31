@@ -5,29 +5,6 @@ from abc import ABC, abstractmethod
 import cv2
 
 
-class Stream(ABC):
-    """
-    As much an exercise in better understanding ABC as it is anything...
-    """
-
-    @abstractmethod
-    def subscribe(self, queue: Queue):
-        pass
-
-    @abstractmethod
-    def unsubscribe(self, queue: Queue):
-        pass
-
-    
-    @abstractmethod
-    def set_fps_target(self, fps_target:int):
-        pass
-    
-    @abstractmethod
-    def _play_worker(self):
-        pass
-
-
 # @dataclass(slots=True)
 @dataclass(frozen=True, slots=True)
 class FramePacket:
@@ -40,6 +17,7 @@ class FramePacket:
     frame_index: int
     frame_time: float
     frame: np.ndarray
+    fps: float
 
 @dataclass(frozen=True, slots=True)
 class SyncPacket:

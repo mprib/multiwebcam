@@ -60,7 +60,7 @@ class CameraConfigTab(QDialog):
         self.frame_rate_spin = QSpinBox()
         self.update_fps_target()
         self.fps_display = QLabel()
-        self.ignore_checkbox = QCheckBox()
+        # self.ignore_checkbox = QCheckBox()
 
         self.place_widgets()
         self.connect_widgets()
@@ -74,7 +74,7 @@ class CameraConfigTab(QDialog):
         self.frame_rate_spin.valueChanged.connect(self.on_frame_rate_spin)
         self.frame_emitter.FPSBroadcast.connect(self.FPSUpdateSlot)
         self.frame_emitter.ImageBroadcast.connect(self.image_update)
-        self.ignore_checkbox.stateChanged.connect(self.update_ignore)
+        # self.ignore_checkbox.stateChanged.connect(self.update_ignore)
         self.session.qt_signaler.fps_target_updated.connect(self.update_fps_target)
 
     def place_widgets(self):
@@ -98,22 +98,22 @@ class CameraConfigTab(QDialog):
         self.fps_grp.layout().addWidget(self.fps_display)
         self.layout().addWidget(self.fps_grp)
         
-        self.ignore_hbox = QHBoxLayout()
-        self.ignore_hbox.addWidget(QLabel("ignore port:"))
-        self.ignore_hbox.addWidget(self.ignore_checkbox)
-        self.layout().addLayout(self.ignore_hbox)
+        # self.ignore_hbox = QHBoxLayout()
+        # self.ignore_hbox.addWidget(QLabel("ignore port:"))
+        # self.ignore_hbox.addWidget(self.ignore_checkbox)
+        # self.layout().addLayout(self.ignore_hbox)
 
     def save_camera(self):
         self.session.save_camera(self.port)
 
-    def update_ignore(self, signal):
-        if signal == 0:  # not checked
-            logger.info(f"Don't ignore camera at port {self.port}")
-            self.camera.ignore = False
-        else:  # value of checkState() might be 2?
-            logger.info(f"Ignore camera at port {self.port}")
-            self.camera.ignore = True
-        self.session.config.save_camera(self.camera)
+    # def update_ignore(self, signal):
+    #     if signal == 0:  # not checked
+    #         logger.info(f"Don't ignore camera at port {self.port}")
+    #         self.camera.ignore = False
+    #     else:  # value of checkState() might be 2?
+    #         logger.info(f"Ignore camera at port {self.port}")
+    #         self.camera.ignore = True
+    #     self.session.config.save_camera(self.camera)
 
     def on_frame_rate_spin(self, fps_rate):
         self.session.set_fps(fps_rate)
