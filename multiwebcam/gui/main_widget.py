@@ -193,16 +193,6 @@ class MainWindow(QMainWindow):
         )
         self.session.qt_signaler.mode_change_success.connect(self.update_enable_disable)
 
-        # self.session.qt_signaler.stream_tools_loaded_signal.connect(self.build_widgets)
-        
-        
-    # def build_widgets(self):
-    #     self.single_camera_widget = SingleCameraWidget(self.session, parent=self.persistent_parent)
-    #     self.multicamera_widget = MultiCameraWidget(self.session, parent = self.persistent_parent)
-    #     self.single_camera_widget.hide()
-    #     self.multicamera_widget.show()
-    #     self.setCentralWidget(self.multicamera_widget)
-        
     def add_to_recent_project(self, project_path: str):
         recent_project_action = QAction(project_path, self)
         recent_project_action.triggered.connect(self.open_recent_project)
