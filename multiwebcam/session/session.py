@@ -11,6 +11,7 @@ from queue import Queue
 from multiwebcam.cameras.camera import Camera
 from multiwebcam.cameras.synchronizer import Synchronizer
 from multiwebcam.gui.frame_emitter import FrameEmitter
+from multiwebcam.gui.frame_dictionary_emitter import FrameDictionaryEmitter
 from multiwebcam.configurator import Configurator
 from multiwebcam.cameras.live_stream import LiveStream
 from multiwebcam.recording.video_recorder import SyncVideoRecorder
@@ -20,7 +21,7 @@ logger = multiwebcam.logger.get(__name__)
 # %%
 MAX_CAMERA_PORT_CHECK = 10
 FILTERED_FRACTION = 0.025  # by default, 2.5% of image points with highest reprojection error are filtered out during calibration
-
+MULTIFRAME_HEIGHT = 300
 
 class SessionMode(Enum):
     """ """
@@ -53,7 +54,7 @@ class LiveSession:
         self.streams = {}
         self.frame_emitters = {}
         self.active_single_port = None
-        
+        self.multicam_render_fps = self.config.get_multicam_render_fps()        
         self.stream_tools_in_process = False
         self.stream_tools_loaded = False
 
@@ -140,7 +141,12 @@ class LiveSession:
         self.unsubscribe_all_frame_emitters()
         self.frame_emitters[self.active_single_port].subscribe()
         
-
+    def set_multicam_render_fps(self,fps):
+        logger.info(f"Updating multicam frame emitter to render view at {fps} fps")
+        self.multicam_render_fps = fps
+        self.multicam_frame_emitter.update_render_fps(fps)
+        self.config.save_multicam_render_fps(fps)
+        
     def get_configured_camera_count(self):
         count = 0
         for key, params in self.config.dict.copy().items():
@@ -209,18 +215,23 @@ class LiveSession:
 
         self._adjust_resolutions()
    
-   
-
         self.synchronizer = Synchronizer(
             self.streams
         )  
 
+        # need to let synchronizer spin up before able to display frames
+        while not hasattr(self.synchronizer, "current_sync_packet"):
+            logger.info("Waiting for initial sync packet to populate in synhronizer")
+            sleep(0.5)
+
+        self.multicam_frame_emitter = FrameDictionaryEmitter(self.synchronizer,self.multicam_render_fps,single_frame_height=MULTIFRAME_HEIGHT)
         # recording widget becomes available when synchronizer is created
         self.stream_tools_loaded = True
         self.stream_tools_in_process = False
 
         logger.info("defaulting into multicamera mode at launch")
         self.set_mode(SessionMode.MultiCamera)
+
 
         logger.info("Signalling successful loading of stream tools")
         self.qt_signaler.stream_tools_loaded_signal.emit()

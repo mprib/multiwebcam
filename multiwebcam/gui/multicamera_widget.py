@@ -1,18 +1,13 @@
-import multiwebcam.logger
-import sys
 from time import sleep
 import math
 from pathlib import Path
-from threading import Thread, Event
-import numpy as np
+from threading import Thread
 from enum import Enum
 
-import cv2
-from PySide6.QtCore import Signal, Slot, QThread
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtCore import Slot
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QGridLayout,
-    QApplication,
     QWidget,
     QSpinBox,
     QLineEdit,
@@ -23,11 +18,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from multiwebcam.session.session import LiveSession, SessionMode
+from multiwebcam.session.session import LiveSession
 from multiwebcam.cameras.synchronizer import Synchronizer
-from multiwebcam.recording.video_recorder import SyncVideoRecorder
-from multiwebcam.configurator import Configurator
-from multiwebcam.interface import FramePacket
+import multiwebcam.logger
 
 logger = multiwebcam.logger.get(__name__)
 # Whatever the target frame rate, the GUI will only display a portion of the actual frames
@@ -48,17 +41,15 @@ class MultiCameraWidget(QWidget):
         self.synchronizer: Synchronizer = self.session.synchronizer
         self.ports = self.synchronizer.ports
 
-        # need to let synchronizer spin up before able to display frames
-        while not hasattr(session.synchronizer, "current_sync_packet"):
-            sleep(0.25)
 
         # create tools to build and emit the displayed frame
-        # self.unpaired_frame_builder = FramePrepper(self.synchronizer)
-        self.thumbnail_emitter = FrameDictionaryEmitter(self.synchronizer)
-        self.thumbnail_emitter.start()
+        self.thumbnail_emitter = self.session.multicam_frame_emitter
 
         self.frame_rate_spin = QSpinBox()
         self.frame_rate_spin.setValue(self.session.fps_target)
+   
+        self.render_rate_spin = QSpinBox()
+        self.render_rate_spin.setValue(self.session.multicam_render_fps) 
 
         self.next_action = NextRecordingActions.StartRecording
         self.start_stop = QPushButton(self.next_action.value)
@@ -126,8 +117,12 @@ class MultiCameraWidget(QWidget):
         dropped_fps_layout.addStretch(1)
         dropped_fps_layout.addWidget(self.dropped_fps_label)
         dropped_fps_layout.addStretch(1)
-
         self.layout().addLayout(dropped_fps_layout)
+        
+        render_group = QHBoxLayout()
+        render_group.addWidget(QLabel("Rendered Rate:"))
+        render_group.addWidget(self.render_rate_spin)
+        self.layout().addLayout(render_group)
 
         camera_count = len(self.ports)
         grid_columns = int(math.ceil(camera_count**0.5))
@@ -156,6 +151,7 @@ class MultiCameraWidget(QWidget):
     def connect_widgets(self):
         self.thumbnail_emitter.ThumbnailImagesBroadcast.connect(self.ImageUpdateSlot)
         self.frame_rate_spin.valueChanged.connect(self.session.set_fps)
+        self.render_rate_spin.valueChanged.connect(self.session.set_multicam_render_fps)
         self.thumbnail_emitter.dropped_fps.connect(self.update_dropped_fps)
         self.start_stop.clicked.connect(self.toggle_start_stop)
         self.session.qt_signaler.fps_target_updated.connect(self.update_fps_target)
@@ -228,194 +224,4 @@ class MultiCameraWidget(QWidget):
             logger.debug("About to set qpixmap to display")
             self.recording_displays[port].setPixmap(qpixmap)
             logger.debug("successfully set display")
-
-
-class FrameDictionaryEmitter(QThread):
-    ThumbnailImagesBroadcast = Signal(dict)
-    dropped_fps = Signal(dict)
-
-    def __init__(self, synchronizer: Synchronizer, single_frame_height=300):
-        super(FrameDictionaryEmitter, self).__init__()
-        self.single_frame_height = single_frame_height
-        self.synchronizer = synchronizer
-        logger.info("Initiated recording frame emitter")
-        self.keep_collecting = Event()
-
-    def run(self):
-        self.keep_collecting.set()
-
-        while self.keep_collecting.is_set():
-            sleep(1 / 3)
-            logger.debug("About to get next recording frame")
-            # recording_frame = self.unpaired_frame_builder.get_recording_frame()
-
-            logger.debug("Referencing current sync packet in synchronizer")
-            self.current_sync_packet = self.synchronizer.current_sync_packet
-
-            thumbnail_qimage = {}
-            for port in self.synchronizer.ports:
-                frame_packet = self.current_sync_packet.frame_packets[port]
-                rotation_count = self.synchronizer.streams[port].camera.rotation_count
-
-                text_frame = frame_packet_2_thumbnail(
-                    frame_packet, rotation_count, self.single_frame_height, port
-                )
-                q_image = cv2_to_qimage(text_frame)
-                thumbnail_qimage[str(port)] = q_image
-
-            self.ThumbnailImagesBroadcast.emit(thumbnail_qimage)
-
-            dropped_fps_dict = {
-                str(port): dropped
-                for port, dropped in self.synchronizer.dropped_fps.items()
-            }
-            self.dropped_fps.emit(dropped_fps_dict)
-        logger.info("Recording thumbnail emitter run thread ended...")
-
-
-def frame_packet_2_thumbnail(
-    frame_packet: FramePacket, rotation_count: int, edge_length: int, port: int
-):
-    raw_frame = get_frame_or_blank(frame_packet, edge_length)
-    # port = frame_packet.port
-
-    # raw_frame = self.get_frame_or_blank(None)
-    square_frame = resize_to_square(raw_frame, edge_length)
-    rotated_frame = apply_rotation(square_frame, rotation_count)
-    flipped_frame = cv2.flip(rotated_frame, 1)
-
-    # put the port number on the top of the frame
-    text_frame = cv2.putText(
-        flipped_frame,
-        str(port),
-        (int(flipped_frame.shape[1] / 2), int(edge_length / 4)),
-        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-        fontScale=1,
-        color=(0, 0, 255),
-        thickness=2,
-    )
-
-    return text_frame
-
-
-def get_frame_or_blank(frame_packet, edge_length):
-    """Synchronization issues can lead to some frames being None among
-    the synched frames, so plug that with a blank frame"""
-
-    if frame_packet is None:
-        logger.debug("plugging blank frame data")
-        frame = np.zeros((edge_length, edge_length, 3), dtype=np.uint8)
-    else:
-        frame = frame_packet.frame
-
-    return frame
-
-
-def resize_to_square(frame, edge_length):
-    """To make sure that frames align well, scale them all to thumbnails
-    squares with black borders."""
-    logger.debug("resizing square")
-
-    height = frame.shape[0]
-    width = frame.shape[1]
-
-    padded_size = max(height, width)
-
-    height_pad = int((padded_size - height) / 2)
-    width_pad = int((padded_size - width) / 2)
-    pad_color = [0, 0, 0]
-
-    logger.debug("about to pad border")
-    frame = cv2.copyMakeBorder(
-        frame,
-        height_pad,
-        height_pad,
-        width_pad,
-        width_pad,
-        cv2.BORDER_CONSTANT,
-        value=pad_color,
-    )
-
-    frame = resize(frame, new_height=edge_length)
-    return frame
-
-
-def resize(image, new_height):
-    (current_height, current_width) = image.shape[:2]
-    ratio = new_height / float(current_height)
-    dim = (int(current_width * ratio), new_height)
-    resized = cv2.resize(image, dim, interpolation=cv2.INTER_AREA)
-    return resized
-
-
-def apply_rotation(frame, rotation_count):
-    if rotation_count == 0:
-        pass
-    elif rotation_count in [1, -3]:
-        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
-    elif rotation_count in [2, -2]:
-        frame = cv2.rotate(frame, cv2.ROTATE_180)
-    elif rotation_count in [-1, 3]:
-        frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-
-    return frame
-
-
-def prep_img_for_qpixmap(image: np.ndarray):
-    """
-    qpixmap needs dimensions divisible by 4 and without that weird things happen.
-    """
-    if image.shape[1] % 4 != 0:  # If the width of the row isn't divisible by 4
-        padding_width = 4 - (image.shape[1] % 4)  # Calculate how much padding is needed
-        padding = np.zeros(
-            (image.shape[0], padding_width, image.shape[2]), dtype=image.dtype
-        )  # Create a black image of the required size
-        image = np.hstack([image, padding])  # Add the padding to the right of the image
-
-    return image
-
-
-
-def cv2_to_qimage(frame):
-    image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-    qt_frame = QImage(
-        image.data,
-        image.shape[1],
-        image.shape[0],
-        QImage.Format.Format_RGB888,
-    )
-
-    return qt_frame
-
-
-def launch_recording_widget(session_path):
-    pass
-#     config = Configurator(session_path)
-#     session = LiveSession(config)
-#     # session.load_stream_tools()
-#     # session._adjust_resolutions()
-#     session.set_mode(SessionMode.Recording)
-#     App = QApplication(sys.argv)
-#     recording_dialog = RecordingWidget(session)
-#     recording_dialog.show()
-
-#     sys.exit(App.exec())
-
-
-if __name__ == "__main__":
-    from multiwebcam.configurator import Configurator
-    from pathlib import Path
-    from PySide6.QtWidgets import QApplication
-    from multiwebcam.session.session import SessionMode
-    config = Configurator(Path(r"C:\Users\Mac Prible\OneDrive\pyxy3d\webcamcap"))
-    session = LiveSession(config)
-    session.load_stream_tools()
-    session.set_mode(SessionMode.MultiCamera)
-    qapp = QApplication()
-    recording_widget = MultiCameraWidget(session)
-    
-
-    recording_widget.show()
-    qapp.exec()
 
