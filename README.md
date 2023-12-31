@@ -1,3 +1,6 @@
+<div align="center"><img src = "https://github.com/mprib/multiwebcam/assets/31831778/1ee00f86-e6fd-497c-9341-433a16bb323c" width = "150"></div>
+
+<div align="center">
 
 ![mwc_logo](https://github.com/mprib/multiwebcam/assets/31831778/1ee00f86-e6fd-497c-9341-433a16bb323c)
 
