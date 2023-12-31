@@ -1,11 +1,9 @@
 # from PySide6.QtCore import QObject, Signal
 from pathlib import Path
 from queue import Queue
-import pandas as pd
 from threading import Thread, Event
 import cv2
 
-from multiwebcam.cameras.synchronizer import Synchronizer
 from multiwebcam.cameras.live_stream import LiveStream
 from multiwebcam.interface import FramePacket
 import multiwebcam.logger
