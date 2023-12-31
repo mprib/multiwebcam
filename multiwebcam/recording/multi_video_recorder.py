@@ -12,7 +12,7 @@ import multiwebcam.logger
 logger = multiwebcam.logger.get(__name__)
 
 
-class SyncVideoRecorder:
+class MultiVideoRecorder:
     def __init__(self, synchronizer: Synchronizer, suffix: str = None):
         """
         suffix: provide a way to clarify any modifications to the video that are being saved

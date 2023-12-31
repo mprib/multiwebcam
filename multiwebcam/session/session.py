@@ -14,7 +14,7 @@ from multiwebcam.gui.frame_emitter import FrameEmitter
 from multiwebcam.gui.frame_dictionary_emitter import FrameDictionaryEmitter
 from multiwebcam.configurator import Configurator
 from multiwebcam.cameras.live_stream import LiveStream
-from multiwebcam.recording.video_recorder import SyncVideoRecorder
+from multiwebcam.recording.multi_video_recorder import MultiVideoRecorder
 
 logger = multiwebcam.logger.get(__name__)
 
@@ -225,7 +225,6 @@ class LiveSession:
             sleep(0.5)
 
         self.multicam_frame_emitter = FrameDictionaryEmitter(self.synchronizer,self.multicam_render_fps,single_frame_height=MULTIFRAME_HEIGHT)
-        # recording widget becomes available when synchronizer is created
         self.stream_tools_loaded = True
         self.stream_tools_in_process = False
 
@@ -244,13 +243,16 @@ class LiveSession:
         for emitter in self.frame_emitters.values():
             emitter.subscribe()
 
+
+
+
     def start_synchronized_recording(
         self, destination_directory: Path, store_point_history: bool = False
     ):
         logger.info("Initiating recording...")
         destination_directory.mkdir(parents=True, exist_ok=True)
 
-        self.sync_video_recorder = SyncVideoRecorder(self.synchronizer)
+        self.sync_video_recorder = MultiVideoRecorder(self.synchronizer)
         self.sync_video_recorder.start_recording(
             destination_directory, store_point_history=store_point_history
         )
