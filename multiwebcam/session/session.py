@@ -52,7 +52,8 @@ class LiveSession:
         self.cameras = {}
         self.streams = {}
         self.frame_emitters = {}
-
+        self.active_single_port = None
+        
         self.stream_tools_in_process = False
         self.stream_tools_loaded = False
 
@@ -98,12 +99,16 @@ class LiveSession:
         match self.mode:
 
             case SessionMode.SingleCamera:
-                # update in case something has changed
 
                 if not self.stream_tools_loaded:
                     self.load_stream_tools()
+
                 self.synchronizer.unsubscribe_from_streams()
-                self.subscribe_all_frame_emitters()
+
+                if self.active_single_port is None:
+                    self.active_single_port = list(self.streams.keys())[0]
+
+                self.set_active_single_stream(self.active_single_port)
                 
             case SessionMode.MultiCamera:
                 logger.info("Attempting to set recording mode")
@@ -130,6 +135,11 @@ class LiveSession:
         # signal to all camera config dialogues to update their fps target spin boxes
         self.qt_signaler.fps_target_updated.emit()
 
+    def set_active_single_stream(self,port):
+        self.active_single_port = port
+        self.unsubscribe_all_frame_emitters()
+        self.frame_emitters[self.active_single_port].subscribe()
+        
 
     def get_configured_camera_count(self):
         count = 0

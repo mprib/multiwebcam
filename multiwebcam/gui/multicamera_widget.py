@@ -245,7 +245,7 @@ class FrameDictionaryEmitter(QThread):
         self.keep_collecting.set()
 
         while self.keep_collecting.is_set():
-            sleep(1 / RENDERED_FPS)
+            sleep(1 / 3)
             logger.debug("About to get next recording frame")
             # recording_frame = self.unpaired_frame_builder.get_recording_frame()
 
