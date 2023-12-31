@@ -1,6 +1,4 @@
-
 import multiwebcam.logger
-
 
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import (
@@ -33,6 +31,8 @@ class CameraTabs(QTabWidget):
 
         self.setTabPosition(QTabWidget.TabPosition.North)
         self.add_cam_tabs()
+        self.currentChanged.connect(self.on_tab_changed)
+        self.on_tab_changed(0)
 
     def keyPressEvent(self, event):
         """
@@ -76,16 +76,31 @@ class CameraTabs(QTabWidget):
             
         else:
             logger.info("No cameras available")
-            
+    
+    def on_tab_changed(self, index):
+        """
+        Called when the current tab changes.
+        Fetches the port number from the current CameraConfigTab and calls set_active_single_stream.
+        """
+        # Retrieve the current CameraConfigTab instance
+        current_tab = self.widget(index)
+
+        # Ensure that the current tab is an instance of CameraConfigTab and has the port attribute
+        if isinstance(current_tab, CameraConfigTab) and hasattr(current_tab, 'port'):
+            port = current_tab.port
+            # Call the session method with the port number
+            self.session.set_active_single_stream(port) 
             
             
 if __name__ == "__main__":
     from multiwebcam.configurator import Configurator
     from pathlib import Path
     from PySide6.QtWidgets import QApplication
+    from multiwebcam.session.session import SessionMode
     config = Configurator(Path(r"C:\Users\Mac Prible\OneDrive\pyxy3d\webcamcap"))
     session = LiveSession(config)
-    session.load_stream_tools()
+    # session.load_stream_tools()
+    session.set_mode(SessionMode.SingleCamera)
 
     qapp = QApplication()
     int_calib_widget = SingleCameraWidget(session)
