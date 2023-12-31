@@ -13,11 +13,11 @@ import cv2
 import numpy as np
 
 from multiwebcam.cameras.camera import Camera
-from multiwebcam.interface import FramePacket, Stream 
+from multiwebcam.interface import FramePacket
 
 logger = multiwebcam.logger.get(__name__)
 
-class LiveStream(Stream):
+class LiveStream():
     def __init__(self, camera: Camera, fps_target: int = 6):
         self.camera: Camera = camera
         self.port = camera.port
@@ -164,11 +164,15 @@ class LiveStream(Stream):
                     if self._show_fps:
                         self._add_fps()
 
+                    # Rate of calling recalc must be frequency of this loop
+
+                    self.FPS_actual = self.get_FPS_actual()
                     frame_packet = FramePacket(
                         port=self.port,
                         frame_time=self.frame_time,
                         frame_index= self.frame_index,
                         frame=self.frame,
+                        fps = self.FPS_actual
                     )
 
                     # cv2.imshow(str(self.port), frame_packet.frame_with_points)
@@ -180,8 +184,6 @@ class LiveStream(Stream):
                     for q in self.subscribers:
                         q.put(frame_packet)
 
-                    # Rate of calling recalc must be frequency of this loop
-                    self.FPS_actual = self.get_FPS_actual()
                 self.frame_index +=1
 
         logger.info(f"Stream stopped at port {self.port}")

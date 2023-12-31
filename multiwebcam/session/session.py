@@ -134,8 +134,9 @@ class LiveSession:
     def get_configured_camera_count(self):
         count = 0
         for key, params in self.config.dict.copy().items():
-            if key.startswith("cam"):
-                count += 1
+            if key.startswith("cam_"):
+                if not params["ignore"]:
+                    count += 1
         return count
 
     def _find_cameras(self):
@@ -178,9 +179,10 @@ class LiveSession:
         """
         self.stream_tools_in_process = True
         # don't bother loading cameras until you load the streams
+
         self.cameras = self.config.get_cameras()
 
-        if len(self.cameras) == 0:
+        if self.get_configured_camera_count() == 0:
             self._find_cameras()
 
         for port, cam in self.cameras.items():
@@ -196,13 +198,14 @@ class LiveSession:
 
 
         self._adjust_resolutions()
-    
+   
+   
+
         self.synchronizer = Synchronizer(
             self.streams
-        )  # defaults to stream default fps of 6
+        )  
 
         # recording widget becomes available when synchronizer is created
-        
         self.stream_tools_loaded = True
         self.stream_tools_in_process = False
 

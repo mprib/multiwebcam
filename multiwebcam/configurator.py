@@ -7,7 +7,7 @@ from datetime import datetime
 from os.path import exists
 import rtoml
 
-from multiwebcam.cameras.camera import Camera
+from multiwebcam.cameras.camera import Camera, CAMERA_BACKENDS
 from concurrent.futures import ThreadPoolExecutor
 
 logger = multiwebcam.logger.get(__name__)
@@ -36,7 +36,6 @@ class Configurator:
 
             self.dict = rtoml.loads("")
             self.dict["CreationDate"] = datetime.now()
-            self.dict["camera_count"] = 0
             self.dict["fps"] = 24
 
             self.update_config_toml()
@@ -81,16 +80,17 @@ class Configurator:
             "rotation_count": camera.rotation_count,
             "ignore": camera.ignore,
             "verified_resolutions": camera.verified_resolutions,
+            "backend": camera.backend
         }
 
         self.dict["cam_" + str(camera.port)] = params
         self.update_config_toml()
 
 
-    def get_cameras(self) -> dict[Camera]:
+    def get_cameras(self) -> dict[int, Camera]:
         cameras = {}
 
-        def add_preconfigured_cam(params):
+        def add_preconfigured_cam(params:dict):
             # try:
             port = params["port"]
             logger.info(f"Attempting to add pre-configured camera at port {port}")
@@ -99,21 +99,20 @@ class Configurator:
                 logger.info(f"Ignoring camera at port {port}")
                 pass  # don't load it in
             else:
-                if "verified_resolutions" in params.keys():
-                    verified_resolutions = params["verified_resolutions"]
-                    cameras[port] = Camera(port, verified_resolutions)
-                else:
-                    cameras[port] = Camera(port)
+                verified_resolutions = params["verified_resolutions"]
+                backend = params["backend"]
 
-                camera = cameras[port]  # just for ease of reference
+                camera = Camera(port=port, verified_resolutions=verified_resolutions, backend=backend)
                 camera.rotation_count = params["rotation_count"]
                 camera.exposure = params["exposure"]
-
+                cameras[port] = camera 
+                
         with ThreadPoolExecutor() as executor:
             for key, params in self.dict.items():
                 if key.startswith("cam"):
                     logger.info(f"Beginning to load {key} with params {params}")
                     executor.submit(add_preconfigured_cam, params)
+
         return cameras
 
 
