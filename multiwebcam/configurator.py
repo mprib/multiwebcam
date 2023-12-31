@@ -37,6 +37,7 @@ class Configurator:
             self.dict = rtoml.loads("")
             self.dict["CreationDate"] = datetime.now()
             self.dict["fps"] = 24
+            self.dict["multicam_render_fps"] = 6
 
             self.update_config_toml()
 
@@ -49,8 +50,16 @@ class Configurator:
     def get_camera_count(self):
         return self.dict["camera_count"]
 
+    def get_multicam_render_fps(self):
+        return self.dict["multicam_render_fps"]
+
+    def save_multicam_render_fps(self,fps):
+        self.dict["multicam_render_fps"] = fps
+        self.update_config_toml()
+
     def get_fps_target(self):
         return self.dict["fps"]
+
 
     def save_fps(self,fps_target):
         self.dict["fps"] = fps_target
