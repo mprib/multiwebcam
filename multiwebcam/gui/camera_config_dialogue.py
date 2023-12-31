@@ -60,7 +60,7 @@ class CameraConfigTab(QDialog):
         self.frame_rate_spin = QSpinBox()
         self.update_fps_target()
         self.fps_display = QLabel()
-        self.ignore_box = QCheckBox()
+        self.ignore_checkbox = QCheckBox()
 
         self.place_widgets()
         self.connect_widgets()
@@ -74,7 +74,7 @@ class CameraConfigTab(QDialog):
         self.frame_rate_spin.valueChanged.connect(self.on_frame_rate_spin)
         self.frame_emitter.FPSBroadcast.connect(self.FPSUpdateSlot)
         self.frame_emitter.ImageBroadcast.connect(self.image_update)
-        self.ignore_box.stateChanged.connect(self.ignore_cam)
+        self.ignore_checkbox.stateChanged.connect(self.update_ignore)
         self.session.qt_signaler.fps_target_updated.connect(self.update_fps_target)
 
     def place_widgets(self):
@@ -97,12 +97,16 @@ class CameraConfigTab(QDialog):
         self.fps_grp.layout().addWidget(self.frame_rate_spin)
         self.fps_grp.layout().addWidget(self.fps_display)
         self.layout().addWidget(self.fps_grp)
-        self.layout().addWidget(self.ignore_box)
+        
+        self.ignore_hbox = QHBoxLayout()
+        self.ignore_hbox.addWidget(QLabel("ignore port:"))
+        self.ignore_hbox.addWidget(self.ignore_checkbox)
+        self.layout().addLayout(self.ignore_hbox)
 
     def save_camera(self):
         self.session.save_camera(self.port)
 
-    def ignore_cam(self, signal):
+    def update_ignore(self, signal):
         if signal == 0:  # not checked
             logger.info(f"Don't ignore camera at port {self.port}")
             self.camera.ignore = False
@@ -154,9 +158,8 @@ class FrameControlWidget(QWidget):
             resolutions_text.append(f"{int(w)} x {int(h)}")
 
         w, h = self.camera.size
-        self.resolution_combo.setCurrentText(f"{int(w)} x {int(h)}")
-
         self.resolution_combo.addItems(resolutions_text)
+        self.resolution_combo.setCurrentText(f"{int(w)} x {int(h)}")
         self.resolution_combo.setMaximumSize(100, 35)
 
         # Exposure slider
