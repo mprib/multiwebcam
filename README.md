@@ -5,9 +5,11 @@
 
 </div>
 
+# What it does
+
+Records synchronized frames from multiple webcams, including frame-by-frame time stamp history, real time synchronization of frames and reporting of dropped frames. 
 
 # Motivation
 
+I needed a way to pull down synchronized video while prototyping a computer vision project. Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. 
 
-
-To provide a quick way to pull down some synchronized frames with a handfull of webcams.
