@@ -166,9 +166,8 @@ class MainWindow(QMainWindow):
         self.config = Configurator(session_path)
         logger.info(f"Launching session with config file stored in {session_path}")
         self.session = LiveSession(self.config)
-        self.session.load_stream_tools()
+        self.session.load_stream_tools() # defaults to multicam state
         self.connect_session_signals() # must be connected for mode change signal to build central widget
-        self.session.set_mode(SessionMode.MultiCamera)
 
         # now connecting to cameras is an option
         # self.connect_cameras_action.setEnabled(True)
