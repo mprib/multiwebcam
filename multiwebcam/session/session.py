@@ -257,7 +257,7 @@ class LiveSession(QObject):
         def worker():
             self.single_stream_recorder.stop_recording()
             
-            while self.single_recording_started.recording:
+            while self.single_recorder.recording:
                 sleep(.5)
                 logger.info("Waiting for recorder to finalize save of data")    
 
