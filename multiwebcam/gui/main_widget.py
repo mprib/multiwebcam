@@ -61,14 +61,14 @@ class MainWindow(QMainWindow):
         self.file_menu.addAction(self.exit_multiwebcam_action)
 
         # CREATE CAMERA MENU
-        self.cameras_menu = self.menu.addMenu("&Cameras")
-        self.connect_cameras_action = QAction("Co&nnect Cameras", self)
-        self.cameras_menu.addAction(self.connect_cameras_action)
-        self.connect_cameras_action.setEnabled(False)
+        # self.cameras_menu = self.menu.addMenu("&Cameras")
+        # self.connect_cameras_action = QAction("Co&nnect Cameras", self)
+        # self.cameras_menu.addAction(self.connect_cameras_action)
+        # self.connect_cameras_action.setEnabled(False)
 
-        self.disconnect_cameras_action = QAction("&Disconnect Cameras", self)
-        self.cameras_menu.addAction(self.disconnect_cameras_action)
-        self.disconnect_cameras_action.setEnabled(False)
+        # self.disconnect_cameras_action = QAction("&Disconnect Cameras", self)
+        # self.cameras_menu.addAction(self.disconnect_cameras_action)
+        # self.disconnect_cameras_action.setEnabled(False)
 
         # CREATE MODE MENU
         self.mode_menu = self.menu.addMenu("&Mode")
@@ -95,9 +95,9 @@ class MainWindow(QMainWindow):
 
     def connect_menu_actions(self):
         self.open_project_action.triggered.connect(self.create_new_project_folder)
-        self.connect_cameras_action.triggered.connect(self.load_stream_tools)
+        # self.connect_cameras_action.triggered.connect(self.load_stream_tools)
         self.exit_multiwebcam_action.triggered.connect(QApplication.instance().quit)
-        self.disconnect_cameras_action.triggered.connect(self.disconnect_cameras)
+        # self.disconnect_cameras_action.triggered.connect(self.disconnect_cameras)
 
         for action in self.mode_menu.actions():
             action.triggered.connect(self.mode_change_action)
@@ -166,12 +166,13 @@ class MainWindow(QMainWindow):
         self.config = Configurator(session_path)
         logger.info(f"Launching session with config file stored in {session_path}")
         self.session = LiveSession(self.config)
+        self.session.load_stream_tools() # defaults to multicam state
+        self.connect_session_signals() # must be connected for mode change signal to build central widget
 
         # now connecting to cameras is an option
-        self.connect_cameras_action.setEnabled(True)
+        # self.connect_cameras_action.setEnabled(True)
 
         # but must exit and start over to launch a new session for now
-        self.connect_session_signals()
 
         self.open_project_action.setEnabled(False)
         self.open_recent_project_submenu.setEnabled(False)

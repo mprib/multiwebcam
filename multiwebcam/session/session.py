@@ -192,47 +192,50 @@ class LiveSession(QObject):
         Frame emitters are created for the individual views.
 
         """
-        self.stream_tools_in_process = True
-        # don't bother loading cameras until you load the streams
+        
+        def worker():
+            self.stream_tools_in_process = True
+            # don't bother loading cameras until you load the streams
 
-        self.cameras = self.config.get_cameras()
+            self.cameras = self.config.get_cameras()
 
-        if self.get_configured_camera_count() == 0:
-            self._find_cameras()
+            if self.get_configured_camera_count() == 0:
+                self._find_cameras()
 
-        for port, cam in self.cameras.items():
-            if port in self.streams.keys():
-                pass  # only add if not added yet
-            else:
-                logger.info(f"Loading Stream for port {port}")
-                stream = LiveStream(cam,fps_target=self.fps_target)
-                self.streams[port] = stream
-                pixmap_edge_length = 500
-                frame_emitter = FrameEmitter(stream, pixmap_edge_length=pixmap_edge_length)
-                self.frame_emitters[port] = frame_emitter
+            for port, cam in self.cameras.items():
+                if port in self.streams.keys():
+                    pass  # only add if not added yet
+                else:
+                    logger.info(f"Loading Stream for port {port}")
+                    stream = LiveStream(cam,fps_target=self.fps_target)
+                    self.streams[port] = stream
+                    pixmap_edge_length = 500
+                    frame_emitter = FrameEmitter(stream, pixmap_edge_length=pixmap_edge_length)
+                    self.frame_emitters[port] = frame_emitter
 
 
-        self._adjust_resolutions()
+            self._adjust_resolutions()
    
-        self.synchronizer = Synchronizer(
-            self.streams
-        )  
+            self.synchronizer = Synchronizer(
+                self.streams
+            )  
 
-        # need to let synchronizer spin up before able to display frames
-        while not hasattr(self.synchronizer, "current_sync_packet"):
-            logger.info("Waiting for initial sync packet to populate in synhronizer")
-            sleep(0.5)
+            # need to let synchronizer spin up before able to display frames
+            while not hasattr(self.synchronizer, "current_sync_packet"):
+                logger.info("Waiting for initial sync packet to populate in synhronizer")
+                sleep(0.5)
 
-        self.multicam_frame_emitter = FrameDictionaryEmitter(self.synchronizer,self.multicam_render_fps,single_frame_height=MULTIFRAME_HEIGHT)
-        self.stream_tools_loaded = True
-        self.stream_tools_in_process = False
+            self.multicam_frame_emitter = FrameDictionaryEmitter(self.synchronizer,self.multicam_render_fps,single_frame_height=MULTIFRAME_HEIGHT)
+            self.stream_tools_loaded = True
+            self.stream_tools_in_process = False
 
-        logger.info("defaulting into multicamera mode at launch")
-        self.set_mode(SessionMode.MultiCamera)
+            logger.info("defaulting into multicamera mode at launch")
+            self.set_mode(SessionMode.MultiCamera)
 
-
-        logger.info("Signalling successful loading of stream tools")
-        self.stream_tools_loaded_signal.emit()
+        self.load_stream_tools_thread = QThread()
+        self.load_stream_tools_thread.run = worker
+        self.load_stream_tools_thread.finished.connect(self.stream_tools_loaded_signal.emit)
+        self.load_stream_tools_thread.start()        
 
     def unsubscribe_all_frame_emitters(self):
         for emitter in self.frame_emitters.values():
@@ -257,7 +260,7 @@ class LiveSession(QObject):
         def worker():
             self.single_stream_recorder.stop_recording()
             
-            while self.single_recording_started.recording:
+            while self.single_recorder.recording:
                 sleep(.5)
                 logger.info("Waiting for recorder to finalize save of data")    
 
