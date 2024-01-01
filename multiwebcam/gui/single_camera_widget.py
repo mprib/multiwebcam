@@ -33,7 +33,13 @@ class CameraTabs(QTabWidget):
         self.add_cam_tabs()
         self.currentChanged.connect(self.on_tab_changed)
         self.on_tab_changed(0)
-
+        self.connect_signals()
+        
+        
+    def connect_signals(self):
+        self.session.single_recording_started.connect(self.disable_tabs)
+        self.session.single_recording_complete.connect(self.enable_tabs)
+        
     def keyPressEvent(self, event):
         """
         Override the keyPressEvent method to allow navigation via PgUp/PgDown
@@ -91,7 +97,16 @@ class CameraTabs(QTabWidget):
             # Call the session method with the port number
             self.session.set_active_single_stream(port) 
             
-            
+    def enable_tabs(self):
+        for index in range(self.count()):
+            if index != self.currentIndex():
+                self.setTabEnabled(index, True)
+ 
+    def disable_tabs(self):
+        for index in range(self.count()):
+            if index != self.currentIndex():
+                self.setTabEnabled(index, False)
+         
 if __name__ == "__main__":
     from multiwebcam.configurator import Configurator
     from pathlib import Path
@@ -101,6 +116,7 @@ if __name__ == "__main__":
     session = LiveSession(config)
     # session.load_stream_tools()
     session.set_mode(SessionMode.SingleCamera)
+    session.set_active_single_stream(0)
 
     qapp = QApplication()
     int_calib_widget = SingleCameraWidget(session)

@@ -182,16 +182,10 @@ class MainWindow(QMainWindow):
         After launching a session, connect signals and slots.
         Much of these will be from the GUI to the session and vice-versa
         """
-        self.session.qt_signaler.mode_change_success.connect(
-            self.update_central_widget_mode
-        )
-        self.session.qt_signaler.stream_tools_loaded_signal.connect(
-            self.update_enable_disable
-        )
-        self.session.qt_signaler.stream_tools_disconnected_signal.connect(
-            self.update_enable_disable
-        )
-        self.session.qt_signaler.mode_change_success.connect(self.update_enable_disable)
+        self.session.mode_change_success.connect( self.update_central_widget_mode)
+        self.session.stream_tools_loaded_signal.connect( self.update_enable_disable)
+        self.session.stream_tools_disconnected_signal.connect( self.update_enable_disable)
+        self.session.mode_change_success.connect(self.update_enable_disable)
 
     def add_to_recent_project(self, project_path: str):
         recent_project_action = QAction(project_path, self)

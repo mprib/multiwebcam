@@ -59,7 +59,8 @@ class Synchronizer:
         """
         Averages dropped frame count across the observed history
         """
-        return {port:np.mean(drop_history) for port,drop_history in self.dropped_frame_history.items()}        
+
+        return {port:np.mean(drop_history) for port,drop_history in self.dropped_frame_history.items() if len(drop_history) >0}        
 
         
     def subscribe_to_streams(self):
@@ -190,9 +191,11 @@ class Synchronizer:
             self.mean_frame_times = self.mean_frame_times[-10:]
 
         delta_t = np.diff(self.mean_frame_times)
-        mean_delta_t = np.mean(delta_t)
-
-        return 1 / mean_delta_t
+        if delta_t.size> 0:
+            mean_delta_t = np.mean(delta_t)
+            return 1 / mean_delta_t
+        else:
+            return 0
 
     def synch_frames_worker(self):
 

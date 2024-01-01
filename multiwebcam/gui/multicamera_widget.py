@@ -154,8 +154,8 @@ class MultiCameraWidget(QWidget):
         self.render_rate_spin.valueChanged.connect(self.session.set_multicam_render_fps)
         self.thumbnail_emitter.dropped_fps.connect(self.update_dropped_fps)
         self.start_stop.clicked.connect(self.toggle_start_stop)
-        self.session.qt_signaler.fps_target_updated.connect(self.update_fps_target)
-        self.session.qt_signaler.recording_complete_signal.connect(
+        self.session.fps_target_updated.connect(self.update_fps_target)
+        self.session.multi_recording_complete_signal.connect(
             self.on_recording_complete
         )
 
