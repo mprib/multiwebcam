@@ -68,10 +68,10 @@ class MainWindow(QMainWindow):
 
         # CREATE MODE MENU
         self.mode_menu = self.menu.addMenu("&Mode")
-        self.intrinsic_mode_select = QAction(SessionMode.SingleCamera.value)
-        self.recording_mode_select = QAction(SessionMode.MultiCamera.value)
-        self.mode_menu.addAction(self.intrinsic_mode_select)
-        self.mode_menu.addAction(self.recording_mode_select)
+        self.single_cam_mode_select = QAction(SessionMode.SingleCamera.value)
+        self.multi_cam_mode_select = QAction(SessionMode.MultiCamera.value)
+        self.mode_menu.addAction(self.single_cam_mode_select)
+        self.mode_menu.addAction(self.multi_cam_mode_select)
 
         for action in self.mode_menu.actions():
             action.setEnabled(False)
@@ -150,11 +150,11 @@ class MainWindow(QMainWindow):
 
     def update_enable_disable(self):
         if self.session.is_camera_setup_eligible():
-            self.intrinsic_mode_select.setEnabled(True)
-            self.recording_mode_select.setEnabled(True)
+            self.single_cam_mode_select.setEnabled(True)
+            self.multi_cam_mode_select.setEnabled(True)
         else:
-            self.intrinsic_mode_select.setEnabled(False)
-            self.recording_mode_select.setEnabled(False)
+            self.single_cam_mode_select.setEnabled(False)
+            self.multi_cam_mode_select.setEnabled(False)
 
     def disconnect_cameras(self):
         self.setCentralWidget(QWidget())
