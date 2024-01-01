@@ -37,7 +37,7 @@ class MainWindow(QMainWindow):
         self.persistent_parent = QWidget(self)                
         
         self.setWindowTitle("multiwebcam")
-        self.setWindowIcon(QIcon(str(Path(__root__, "multiwebcam/gui/icons/video-camera.svg"))))
+        self.setWindowIcon(QIcon(str(Path(__root__, "multiwebcam/gui/icons/tri-cam.svg"))))
         self.setMinimumSize(500, 500)
 
         # File Menu
