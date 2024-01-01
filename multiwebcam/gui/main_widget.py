@@ -149,11 +149,6 @@ class MainWindow(QMainWindow):
                 self.setCentralWidget(self.multicamera_widget)
 
     def update_enable_disable(self):
-        # note: if the cameras are connected,then you can peak
-        # into extrinsic/recording tabs, though cannot collect data
-
-        # you can always look at a charuco board
-
         if self.session.is_camera_setup_eligible():
             self.intrinsic_mode_select.setEnabled(True)
             self.recording_mode_select.setEnabled(True)
