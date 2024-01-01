@@ -45,7 +45,7 @@ class SingleVideoRecorder:
             frame_packet: FramePacket = self.frame_packet_in_q.get()
 
             # provide periodic updates of recording queue
-            logger.info("Getting size of sync packet q")
+            # logger.info("Getting size of sync packet q")
             backlog = self.frame_packet_in_q.qsize()
             if backlog % 25 == 0 and backlog != 0:
                 logger.info(
@@ -57,7 +57,7 @@ class SingleVideoRecorder:
                 logger.info("End of sync packets signaled...breaking record loop")
                 break
             else:
-                logger.info("Processing frame packet...")
+                # logger.info("Processing frame packet...")
                 self.video_writer.write(frame_packet.frame)
 
             if not stream_subscription_released and self.trigger_stop.is_set():

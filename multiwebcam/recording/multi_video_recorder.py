@@ -146,18 +146,13 @@ class MultiVideoRecorder:
                 logger.info(f"releasing video writer for port {port}")
                 self.video_writers[port].release()
 
-            # del self.video_writers
-
             logger.info("Initiate storing of frame history")
             self.store_frame_history()
 
         logger.info("Initiate storing of point history")
-        if store_point_history:
-            self.store_point_history()
         self.trigger_stop.clear()  # reset stop recording trigger
         self.recording = False
         logger.info("About to emit `all frames saved` signal")
-        # self.all_frames_saved_signal.emit()
 
     def store_frame_history(self):
         df = pd.DataFrame(self.frame_history)

@@ -8,6 +8,7 @@ from time import sleep
 from enum import Enum
 from queue import Queue
 
+from PySide6.QtCore import QThread
 from multiwebcam.cameras.camera import Camera
 from multiwebcam.cameras.synchronizer import Synchronizer
 from multiwebcam.gui.frame_emitter import FrameEmitter
@@ -15,6 +16,7 @@ from multiwebcam.gui.frame_dictionary_emitter import FrameDictionaryEmitter
 from multiwebcam.configurator import Configurator
 from multiwebcam.cameras.live_stream import LiveStream
 from multiwebcam.recording.multi_video_recorder import MultiVideoRecorder
+from multiwebcam.recording.single_video_recorder import SingleVideoRecorder
 
 logger = multiwebcam.logger.get(__name__)
 
@@ -30,22 +32,19 @@ class SessionMode(Enum):
     MultiCamera = "&MultiCamera"
 
 
-class QtSignaler(QObject):
+class LiveSession(QObject):
     stream_tools_loaded_signal = Signal()
     stream_tools_disconnected_signal = Signal()
-    recording_complete_signal = Signal()
+    multi_recording_complete_signal = Signal()
     mode_change_success = Signal()
     fps_target_updated = Signal()
-
-    def __init__(self) -> None:
-        super(QtSignaler, self).__init__()
-
-
-class LiveSession:
-    def __init__(self, config: Configurator):
+    single_recording_started = Signal()
+    single_recording_complete = Signal()
+    
+    
+    def __init__(self, config: Configurator, parent=None):
         # need a way to let the GUI know when certain actions have been completed
-        self.qt_signaler = QtSignaler()
-
+        super().__init__(parent)
         self.config = config
         self.path = self.config.workspace_path
 
@@ -77,7 +76,7 @@ class LiveSession:
         self.synchronizer.stop_event.set()
         self.synchronizer = None
         self.stream_tools_loaded = False
-        self.qt_signaler.stream_tools_disconnected_signal.emit()
+        self.stream_tools_disconnected_signal.emit()
 
     def is_camera_setup_eligible(self):
         # assume true and prove false
@@ -124,7 +123,7 @@ class LiveSession:
                 self.synchronizer.subscribe_to_streams()
                 
 
-        self.qt_signaler.mode_change_success.emit()
+        self.mode_change_success.emit()
 
     def set_fps(self, fps_target: int):
         self.fps_target = fps_target
@@ -134,7 +133,7 @@ class LiveSession:
         self.config.save_fps(fps_target)
         
         # signal to all camera config dialogues to update their fps target spin boxes
-        self.qt_signaler.fps_target_updated.emit()
+        self.fps_target_updated.emit()
 
     def set_active_single_stream(self,port):
         self.active_single_port = port
@@ -233,7 +232,7 @@ class LiveSession:
 
 
         logger.info("Signalling successful loading of stream tools")
-        self.qt_signaler.stream_tools_loaded_signal.emit()
+        self.stream_tools_loaded_signal.emit()
 
     def unsubscribe_all_frame_emitters(self):
         for emitter in self.frame_emitters.values():
@@ -244,7 +243,32 @@ class LiveSession:
             emitter.subscribe()
 
 
+    def start_single_stream_recording(self,port:int, destination_directory:Path=None):
+        
+        self.single_recording_started.emit()
+        if destination_directory is None:
+            destination_directory = self.path
+        
+        stream = self.streams[port]
+        self.single_stream_recorder = SingleVideoRecorder(stream = stream)
+        self.single_stream_recorder.start_recording(destination_directory)
 
+    def stop_single_stream_recording(self):
+        def worker():
+            self.single_stream_recorder.stop_recording()
+            
+            while self.single_recording_started.recording:
+                sleep(.5)
+                logger.info("Waiting for recorder to finalize save of data")    
+
+        
+        self.stop_single_stream_recording_thread = QThread()
+        self.stop_single_stream_recording_thread.run = worker
+        self.stop_single_stream_recording_thread.finished.connect(self.single_recording_complete.emit)
+        self.stop_single_stream_recording_thread.start()
+
+         
+    
 
     def start_synchronized_recording(
         self, destination_directory: Path, store_point_history: bool = False
@@ -253,9 +277,7 @@ class LiveSession:
         destination_directory.mkdir(parents=True, exist_ok=True)
 
         self.sync_video_recorder = MultiVideoRecorder(self.synchronizer)
-        self.sync_video_recorder.start_recording(
-            destination_directory, store_point_history=store_point_history
-        )
+        self.sync_video_recorder.start_recording( destination_directory)
         self.is_recording = True
 
     def stop_synchronized_recording(self):
@@ -268,7 +290,7 @@ class LiveSession:
         self.is_recording = False
 
         logger.info("Recording of frames is complete...signalling change in status")
-        self.qt_signaler.recording_complete_signal.emit()
+        self.multi_recording_complete_signal.emit()
 
 
     def _adjust_resolutions(self):
