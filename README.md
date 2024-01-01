@@ -1,7 +1,7 @@
 <div align="center">  
   <img src = "https://github.com/mprib/multiwebcam/assets/31831778/73636fdb-c5a1-4f29-af7d-418a1072b0be" width = "200">
 
-## *Synchronized webcam recording to bootstrap low-cost/early-stage computer vision projects*
+*Synchronized webcam recording to bootstrap low-cost/early-stage computer vision projects*
 
 </div>
 
