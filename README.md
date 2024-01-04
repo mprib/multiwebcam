@@ -71,4 +71,4 @@ mwc
 
 Once you've launched MultiWebCam, choose a new project directory through the File menu. When you've done that, MWC will attempt to connect to the cameras currently on your system and will create a `recording_config.toml` file in the project directory. 
 
-From the `Mode` menu you can select single camera to change camera settings (such as resolution and exposure). You can make single camera recordings from the 
+From the `Mode` menu you can select single camera to change camera settings (such as resolution and exposure). On the MultCamera mode you can set the target fps to achieve a desired dropped frame rate and record batches of videos.
