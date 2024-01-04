@@ -11,14 +11,18 @@
 
 # Introduction
 
-I needed a way to pull down synchronized video while prototyping a computer vision project (https://github.com/mprib/pyxy3d). Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. I did still have the following core needs:
+I needed a way to pull down synchronized video while prototyping a computer vision project . Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. I did still have the following core needs:
 
 - Record synchronized frames from multiple webcams
 - include frame-by-frame time stamp history
 - synchronize in real time to understand dropped frame rate
-
-
-Please note that given the size of some core dependencies (OpenCV, Mediapipe, and PySide6 are among them) installation and initial launch can take a while. 
+- easy adjustment of the following parameters:
+  - resolution
+  - exposure
+  - target fps
+ 
+    
+This code had been part of another project (https://github.com/mprib/pyxy3d), but I have spun it off to create a clear seperation of concerns between data capture and data processing, while hopefully creating a simpler package that others might find useful. If MWC is close to what you need but not quite, please feel free to raise an issue and I'll see if I can incorporate your use case.  
 
 # Quick Start
 ## Basic `pip` install
