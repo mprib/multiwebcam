@@ -33,7 +33,7 @@ You can install MultiWebCam into your python environment with `pip install multi
 mwc
 ```
 
-Note that this has primarily been  tested on Windows 10, infrequently on MacOS, and will not work on Linux as far as I can tell ☹️. If someone is familiar with getting USB cameras working through OpenCV, I'm all ears.
+Note that this has primarily been  tested on Windows 10, infrequently on MacOS, and will not work on Linux as far as I can tell ☹️. If someone is familiar with getting USB cameras working through OpenCV on Linux, I'm all ears.
 
 
 
