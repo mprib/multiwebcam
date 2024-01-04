@@ -61,13 +61,13 @@ poetry install
 
 By running poetry install, you'll install all dependencies and also set up the multiwebcam package in editable mode. Any changes you make to the code will be reflected in your environment.
 
+# Capturing Data
+
 Launch MultiWebCam from the command line:
 
 ```
 mwc
 ```
-
-# Capturing Data
 
 Once you've launched MultiWebCam, choose a new project directory through the File menu. When you've done that, MWC will attempt to connect to the cameras currently on your system and will create a `recording_config.toml` file in the project directory. 
 
