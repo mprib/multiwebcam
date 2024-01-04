@@ -9,13 +9,14 @@
 
 </div>
 
-# What it does
+# Introduction
 
-Records synchronized frames from multiple webcams, including frame-by-frame time stamp history, real time synchronization of frames and reporting of dropped frames. 
+I needed a way to pull down synchronized video while prototyping a computer vision project (https://github.com/mprib/pyxy3d). Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. I did still have the following core needs:
 
-# Motivation
+- Record synchronized frames from multiple webcams
+- include frame-by-frame time stamp history
+- synchronize in real time to understand dropped frame rate
 
-I needed a way to pull down synchronized video while prototyping a computer vision project (https://github.com/mprib/pyxy3d). Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. 
 
 Please note that given the size of some core dependencies (OpenCV, Mediapipe, and PySide6 are among them) installation and initial launch can take a while. 
 
@@ -29,3 +30,41 @@ mwc
 ```
 
 Note that this has primarily been  tested on Windows 10, infrequently on MacOS, and will not work on Linux as far as I can tell ☹️. If someone is familiar with getting USB cameras working through OpenCV, I'm all ears.
+
+
+
+## Editable Install Using Poetry
+
+If you prefer to contribute to multiwebcam or want to install it in editable mode, follow these steps using Poetry:
+
+Clone the Repository:
+
+```bash
+git clone https://github.com/mprib/multiwebcam.git
+cd multiwebcam
+```
+
+Install Poetry:
+```
+pip install poetry
+```
+
+Set Up the Environment:
+
+```bash
+poetry install
+```
+
+By running poetry install, you'll install all dependencies and also set up the multiwebcam package in editable mode. Any changes you make to the code will be reflected in your environment.
+
+Launch MultiWebCam from the command line:
+
+```
+mwc
+```
+
+# Capturing Data
+
+Once you've launched MultiWebCam, choose a new project directory through the File menu. When you've done that, MWC will attempt to connect to the cameras currently on your system and will create a `recording_config.toml` file in the project directory. 
+
+From the `Mode` menu you can select single camera to change camera settings (such as resolution and exposure). You can make single camera recordings from the 
