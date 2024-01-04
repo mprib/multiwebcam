@@ -27,7 +27,7 @@ This code had been part of another project (https://github.com/mprib/pyxy3d), bu
 # Quick Start
 ## Basic `pip` install
 
-You can install MultiWebCam into your python environment with `pip install multiwebcam` and then launch it from the command line with
+You can install MWC into your python environment with `pip install multiwebcam` and then launch it from the command line with
 
 ```bash
 mwc
@@ -39,7 +39,7 @@ Note that this has primarily been  tested on Windows 10, infrequently on MacOS, 
 
 ## Editable Install Using Poetry
 
-If you prefer to contribute to multiwebcam or want to install it in editable mode, follow these steps using Poetry:
+If you prefer to contribute to MWC or want to install it in editable mode, follow these steps using Poetry:
 
 Clone the Repository:
 
