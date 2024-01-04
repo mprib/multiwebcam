@@ -11,7 +11,7 @@
 
 # Introduction
 
-I needed a way to pull down synchronized video while prototyping a computer vision project . Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. I did still have the following core needs:
+I needed a way to pull down synchronized video while prototyping a computer vision project . Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. This put simple USB webcams at the top of the list for hardware, and OpenCV serves as a straightforward way to manage the cameras. These are the following core needs that are currently implemented in MultiWebCam (MWC):
 
 - Record synchronized frames from multiple webcams
 - include frame-by-frame time stamp history
