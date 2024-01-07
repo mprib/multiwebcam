@@ -1,4 +1,6 @@
-![image](https://github.com/mprib/multiwebcam/assets/31831778/6760494d-2c3a-4750-a5ee-8b758f5cc097)
+
+
+
 <div align="center">  
 
 # 📷📷📷 MULTIWEBCAM 📷📷📷
