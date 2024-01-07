@@ -69,6 +69,8 @@ Launch MultiWebCam from the command line:
 mwc
 ```
 
-Once you've launched MultiWebCam, choose a new project directory through the File menu. When you've done that, MWC will attempt to connect to the cameras currently on your system and will create a `recording_config.toml` file in the project directory. 
+Once you've launched MultiWebCam, choose a new project directory through the File menu. Make sure that the USB cameras you want to use are currently plugged in when you launch the new session.
+
+MWC will attempt to connect to the cameras currently and will create a `recording_config.toml` file in the project directory. 
 
 From the `Mode` menu you can select single camera to change camera settings (such as resolution and exposure). On the MultCamera mode you can set the target fps to achieve a desired dropped frame rate and record batches of videos.
