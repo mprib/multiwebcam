@@ -11,14 +11,11 @@
 
 </div>
 
-
-<img src = "pyxy3d/gui/icons/pyxy_logo.svg" width = "150">
-
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/multiwebcam?color=blue)](https://pypi.org/project/multiwebcam/)
 [![PyPI - License](https://img.shields.io/pypi/l/multiwebcam?color=blue)](https://www.gnu.org/licenses/lgpl-3.0.en.html)
 [![PyPI - Version](https://img.shields.io/pypi/v/multiwebcam?color=blue)](https://pypi.org/project/multiwebcam/)
 [![GitHub last commit](https://img.shields.io/github/last-commit/mprib/multiwebcam.svg)](https://github.com/mprib/multiwebcam/commits)
-[![GitHub stars](https://img.shields.io/github/stars/mprib/multiwebcam.svg?style=social&label=Star)](https://github.com/mprib/multiwebcam/stargazers)
+![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)
+
 </div>
 
 
