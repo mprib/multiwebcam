@@ -1,4 +1,4 @@
-
+![image](https://github.com/mprib/multiwebcam/assets/31831778/6760494d-2c3a-4750-a5ee-8b758f5cc097)
 <div align="center">  
 
 # 📷📷📷 MULTIWEBCAM 📷📷📷
@@ -11,18 +11,20 @@
 
 # Introduction
 
-I needed a way to record synchronized video while prototyping a computer vision project . Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. This put simple USB webcams at the top of the list for hardware, and OpenCV serves as a straightforward way to manage the cameras. These are the following core needs that are currently implemented in MultiWebCam (MWC):
+I needed a way to record synchronized video while prototyping a computer vision project ([pyxy3D](https://github.com/mprib/pyxy3d)). Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. When conscientiously managed, USB webcams controlled via OpenCV can perform surprisingly well at this task. I have spun this functionality off into its own package to create a clear seperation of concerns between data capture and data processing, while hopefully creating a simpler package that others might find useful. 
+
+If MultiWebCam (MWC) is close to what you need but not quite, please feel free to raise an issue and I'll see if I can incorporate your use case. These are the core functions that are currently implemented:
 
 - Record synchronized frames from multiple webcams
-- include frame-by-frame time stamp history
+- Record from single webcams to pull single camera calibration video.
 - synchronize in real time to understand dropped frame rate
+- include frame-by-frame time stamp history to facilitate off-line processing
 - easy adjustment of the following parameters:
   - resolution
   - exposure
   - target fps
  
-    
-This code had been part of another project (https://github.com/mprib/pyxy3d), but I have spun it off to create a clear seperation of concerns between data capture and data processing, while hopefully creating a simpler package that others might find useful. If MWC is close to what you need but not quite, please feel free to raise an issue and I'll see if I can incorporate your use case.  
+
 
 # Quick Start
 ## Basic `pip` install
