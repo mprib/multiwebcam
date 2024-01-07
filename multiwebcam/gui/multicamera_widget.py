@@ -4,13 +4,14 @@ from pathlib import Path
 from threading import Thread
 from enum import Enum
 
-from PySide6.QtCore import Slot
+from PySide6.QtCore import Slot, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QGridLayout,
     QWidget,
     QSpinBox,
     QLineEdit,
+    QScrollArea,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -47,9 +48,11 @@ class MultiCameraWidget(QWidget):
 
         self.frame_rate_spin = QSpinBox()
         self.frame_rate_spin.setValue(self.session.fps_target)
+        self.frame_rate_spin.setMaximumWidth(50)
    
         self.render_rate_spin = QSpinBox()
         self.render_rate_spin.setValue(self.session.multicam_render_fps) 
+        self.render_rate_spin.setMaximumWidth(50)
 
         self.next_action = NextRecordingActions.StartRecording
         self.start_stop = QPushButton(self.next_action.value)
@@ -100,9 +103,21 @@ class MultiCameraWidget(QWidget):
     def place_widgets(self):
         self.setLayout(QVBoxLayout())
         self.settings_group = QGroupBox("Settings")
-        self.settings_group.setLayout(QHBoxLayout())
-        self.settings_group.layout().addWidget(QLabel("Frame Rate:"))
-        self.settings_group.layout().addWidget(self.frame_rate_spin)
+        self.settings_layout = QHBoxLayout()
+        self.settings_group.setLayout(self.settings_layout)
+
+        # Frame Rate layout
+        frame_rate_layout = QHBoxLayout()
+        frame_rate_layout.addWidget(QLabel("Frame Rate:"), alignment=Qt.AlignmentFlag.AlignRight)
+        frame_rate_layout.addWidget(self.frame_rate_spin, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.settings_layout.addLayout(frame_rate_layout)
+
+        # Rendered Rate layout
+        rendered_rate_layout = QHBoxLayout()
+        rendered_rate_layout.addWidget(QLabel("Rendered Rate:"), alignment=Qt.AlignmentFlag.AlignRight)
+        rendered_rate_layout.addWidget(self.render_rate_spin, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.settings_layout.addLayout(rendered_rate_layout)
+
         self.layout().addWidget(self.settings_group)
 
         self.record_controls = QGroupBox()
@@ -118,22 +133,15 @@ class MultiCameraWidget(QWidget):
         dropped_fps_layout.addWidget(self.dropped_fps_label)
         dropped_fps_layout.addStretch(1)
         self.layout().addLayout(dropped_fps_layout)
-        
-        render_group = QHBoxLayout()
-        render_group.addWidget(QLabel("Rendered Rate:"))
-        render_group.addWidget(self.render_rate_spin)
-        self.layout().addLayout(render_group)
 
         camera_count = len(self.ports)
         grid_columns = int(math.ceil(camera_count**0.5))
-        grid_rows = int(math.ceil(camera_count / grid_columns))
 
         frame_grid = QGridLayout()
         row = 0
         column = 0
         for port in sorted(self.ports):
             frame_grid.addWidget(self.recording_displays[str(port)], row, column)
-
             # update row and column for next iteration
             if column >= grid_columns - 1:
                 # start fresh on next row
@@ -146,7 +154,17 @@ class MultiCameraWidget(QWidget):
         frame_display_layout.addStretch(1)
         frame_display_layout.addLayout(frame_grid)
         frame_display_layout.addStretch(1)
-        self.layout().addLayout(frame_display_layout)
+        
+        scroll_view = QWidget()
+        scroll_view.setLayout(frame_display_layout)        
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setWidget(scroll_view)
+        
+        self.layout().addWidget(self.scroll_area)
+        # self.layout().addLayout(frame_display_layout)
 
     def connect_widgets(self):
         self.thumbnail_emitter.ThumbnailImagesBroadcast.connect(self.ImageUpdateSlot)
