@@ -1,29 +1,16 @@
-import logging
 from multiwebcam.logger import get, XStream
-logger = get(__name__)
 
-import sys
 from PySide6.QtCore import Slot, Qt
 from PySide6.QtWidgets import (
     QWidget,
-    QDialog,
     QApplication,
     QTextBrowser,
     QPushButton,
     QVBoxLayout,
 )
 
-from multiwebcam.session.session import LiveSession
-from pathlib import Path
-from threading import Thread
 from time import time
-# def test():
-#     def worker():
-#         session = Session(Path(r"C:\Users\Mac Prible\repos\multiwebcam\tests\217"))
-#         session.find_cameras()
-#     thread = Thread(target=worker, args=(), daemon=True)
-#     thread.start()
-
+logger = get(__name__)
 
 
 class LogWidget(QWidget):
