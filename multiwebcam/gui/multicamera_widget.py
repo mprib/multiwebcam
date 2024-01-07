@@ -108,13 +108,15 @@ class MultiCameraWidget(QWidget):
 
         # Frame Rate layout
         frame_rate_layout = QHBoxLayout()
-        frame_rate_layout.addWidget(QLabel("Frame Rate:"), alignment=Qt.AlignmentFlag.AlignRight)
+        frame_rate_layout.addWidget(QLabel("Target Frame Rate:"), alignment=Qt.AlignmentFlag.AlignRight)
         frame_rate_layout.addWidget(self.frame_rate_spin, alignment=Qt.AlignmentFlag.AlignLeft)
         self.settings_layout.addLayout(frame_rate_layout)
 
         # Rendered Rate layout
         rendered_rate_layout = QHBoxLayout()
-        rendered_rate_layout.addWidget(QLabel("Rendered Rate:"), alignment=Qt.AlignmentFlag.AlignRight)
+        rendered_rate_label = QLabel("Rendered Rate:")
+        rendered_rate_label.setToolTip("Manages the rate the GUI refreshes. Reduce this to free up system resources for recording at Target FPS.")
+        rendered_rate_layout.addWidget(rendered_rate_label, alignment=Qt.AlignmentFlag.AlignRight)
         rendered_rate_layout.addWidget(self.render_rate_spin, alignment=Qt.AlignmentFlag.AlignLeft)
         self.settings_layout.addLayout(rendered_rate_layout)
 
