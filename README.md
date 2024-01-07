@@ -11,6 +11,17 @@
 
 </div>
 
+
+<img src = "pyxy3d/gui/icons/pyxy_logo.svg" width = "150">
+
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/multiwebcam?color=blue)](https://pypi.org/project/multiwebcam/)
+[![PyPI - License](https://img.shields.io/pypi/l/multiwebcam?color=blue)](https://www.gnu.org/licenses/lgpl-3.0.en.html)
+[![PyPI - Version](https://img.shields.io/pypi/v/multiwebcam?color=blue)](https://pypi.org/project/multiwebcam/)
+[![GitHub last commit](https://img.shields.io/github/last-commit/mprib/multiwebcam.svg)](https://github.com/mprib/multiwebcam/commits)
+[![GitHub stars](https://img.shields.io/github/stars/mprib/multiwebcam.svg?style=social&label=Star)](https://github.com/mprib/multiwebcam/stargazers)
+</div>
+
+
 # Introduction
 
 I needed a way to record synchronized video while prototyping a computer vision project ([pyxy3D](https://github.com/mprib/pyxy3d)). Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. When conscientiously managed, USB webcams controlled via OpenCV can perform surprisingly well at this task. I have spun this functionality off into its own package to create a clear seperation of concerns between data capture and data processing, while hopefully creating a simpler package that others might find useful. 
