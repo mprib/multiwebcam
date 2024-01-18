@@ -23,7 +23,7 @@
 
 # Introduction
 
-I needed a way to record synchronized video while prototyping a computer vision project ([pyxy3D](https://github.com/mprib/pyxy3d)). Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. When conscientiously managed, USB webcams controlled via OpenCV can perform surprisingly well at this task. I have spun this functionality off into its own package to create a clear seperation of concerns between data capture and data processing, while hopefully creating a simpler package that others might find useful. 
+I needed a way to record synchronized video while prototyping a computer vision project ([pyxy3D](https://github.com/mprib/pyxy3d)). Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. When conscientiously managed, USB webcams controlled via OpenCV can perform surprisingly well at this task. I have spun this functionality off into its own package to create a clear separation of concerns between data capture and data processing, while hopefully creating a simpler package that others might find useful. 
 
 If MultiWebCam (MWC) is close to what you need but not quite, please feel free to raise an issue and I'll see if I can incorporate your use case. These are the core functions that are currently implemented:
 
