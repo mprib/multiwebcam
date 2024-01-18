@@ -1,9 +1,9 @@
 [tool.poetry]
 name = "multiwebcam"
-version = "0.1.1"
+version = "0.1.2"
 description = "Record synchronized webcam footage"
 authors = ["Mac Prible <prible@gmail.com>"]
-license = "LGPLv3"
+license = "BSD-2-Clause"
 readme = "README.md"
 
 [tool.poetry.dependencies]
