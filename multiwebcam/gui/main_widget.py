@@ -1,6 +1,7 @@
 import multiwebcam.logger
 from pathlib import Path
 
+
 import subprocess
 import os
 from threading import Thread
@@ -23,6 +24,7 @@ from multiwebcam.configurator import Configurator
 from multiwebcam.gui.single_camera_widget import (
     SingleCameraWidget,
 )
+from multiwebcam.gui.perf_counter_widget import PerfCounterWidget
 from multiwebcam.gui.multicamera_widget import MultiCameraWidget
 
 logger = multiwebcam.logger.get(__name__)
@@ -250,12 +252,17 @@ class MainWindow(QMainWindow):
             rtoml.dump(self.app_settings, f)
 
 
-def launch_main():
+def launch_main(show_clock=False):
     # import qdarktheme
 
     app = QApplication(sys.argv)
     # qdarktheme.setup_theme("auto")
     window = MainWindow()
+
+    if show_clock:
+        widget = PerfCounterWidget()
+        widget.show()
+
     window.show()
     app.exec()
 
