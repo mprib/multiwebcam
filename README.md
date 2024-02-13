@@ -88,3 +88,13 @@ Once you've launched MultiWebCam, choose a new project directory through the Fil
 MWC will attempt to connect to the cameras currently and will create a `recording_config.toml` file in the project directory. 
 
 From the `Mode` menu you can select single camera to change camera settings (such as resolution and exposure). On the MultCamera mode you can set the target fps to achieve a desired dropped frame rate and record batches of videos.
+
+## Checking Against System Clock
+
+To provide a check of the accuracy of the time stamps, you can launch a widget that displays the `perf_counter` from the system by running from the command line:
+
+```
+mwc clock
+```
+
+Cross checking the frames with the recorded time stamp value can provide a sense of the temporal accuracy of the recording. 

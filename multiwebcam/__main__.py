@@ -11,10 +11,10 @@ logger = multiwebcam.logger.get(__name__)
 
 def CLI_parser():
     if len(sys.argv) == 1:
-        launch_main()
+        launch_main(show_clock=False)
 
     if len(sys.argv) == 2:
-        launch_widget = sys.argv[1]
+        modifiers = sys.argv[1]
 
-        if launch_widget in ["record", "rec", "-r"]:
-            pass
+        if modifiers in ["clock", "-c"]:
+            launch_main(show_clock=True)
