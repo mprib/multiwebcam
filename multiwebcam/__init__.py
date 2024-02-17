@@ -59,7 +59,12 @@ print(f"Source code for this package is available at: {__repo_url__}")
 print(
     f"Data and Log files associated with {__package_name__} are stored in {__app_dir__}"
 )
-
+print("""              _ _   _ __    __     _       ___                
+  /\/\  _   _| | |_(_) / /\ \ \___| |__   / __\__ _ _ __ ___  
+ /    \| | | | | __| \ \/  \/ / _ \ '_ \ / /  / _` | '_ ` _ \ 
+/ /\/\ \ |_| | | |_| |\  /\  /  __/ |_) / /__| (_| | | | | | |
+\/    \/\__,_|_|\__|_| \/  \/ \___|_.__/\____/\__,_|_| |_| |_|
+                                                              """)
 
 def get_config(session_directory: Path) -> dict:
     """
