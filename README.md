@@ -35,7 +35,13 @@ If MultiWebCam (MWC) is close to what you need but not quite, please feel free t
   - resolution
   - exposure
   - target fps
- 
+
+# Ballparking Accuracy
+
+The video below demonstrates the synchronization of 4 webcams recording at 720p and 24 fps. Based on visual inspection of synchronized frames the vast majority of sync packets are within a few hundredths of a second. This was done with a 7 year old laptop. When working on a desktop that is less of a potato, I've been able to comfortably manage more cameras. YMMV.
+
+
+
 
 
 # Quick Start
