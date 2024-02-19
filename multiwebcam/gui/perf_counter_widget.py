@@ -19,9 +19,6 @@ class PerfCounterWidget(QWidget):
         self.layout.addWidget(self.perfLabel)
         self.setLayout(self.layout)
 
-
-
-        # Timer to update the label every 100 milliseconds for smoother updates
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.updateLabel)
         self.timer.start(10)  # Update interval in milliseconds
