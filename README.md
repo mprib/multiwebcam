@@ -21,10 +21,6 @@
 </div>
 
 
-
-https://github.com/mprib/multiwebcam/assets/31831778/0bfce024-5b58-4ea1-880a-d63a77ebba7a
-
-
 # Introduction
 
 I needed a way to record synchronized video while prototyping a computer vision project ([caliscope](https://github.com/mprib/caliscope)). Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. When conscientiously managed, USB webcams controlled via OpenCV can perform surprisingly well at this task. I have spun this functionality off into its own package to create a clear separation of concerns between data capture and data processing, while hopefully creating a simpler package that others might find useful. 
@@ -39,13 +35,6 @@ If MultiWebCam (MWC) is close to what you need but not quite, please feel free t
   - resolution
   - exposure
   - target fps
-
-# Ballparking Accuracy
-
-The video below demonstrates the synchronization of 4 webcams recording at 720p and 24 fps. Based on visual inspection of synchronized frames the vast majority of sync packets are within a few hundredths of a second. This was done with a 7 year old laptop. When working on a desktop that is less of a potato, I've been able to comfortably manage more cameras. YMMV.
-
-https://github.com/mprib/multiwebcam/assets/31831778/f9631f16-18ca-400e-a1b8-23ccfab02c7d
-
 
 
 # Quick Start
