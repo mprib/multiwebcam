@@ -21,6 +21,9 @@
 </div>
 
 
+https://github.com/mprib/multiwebcam/assets/31831778/9eef8ada-cfce-4c7a-b6c1-5dba641dd48e
+
+
 # Introduction
 
 I needed a way to record synchronized video while prototyping a computer vision project ([caliscope](https://github.com/mprib/caliscope)). Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. When conscientiously managed, USB webcams controlled via OpenCV can perform surprisingly well at this task. I have spun this functionality off into its own package to create a clear separation of concerns between data capture and data processing, while hopefully creating a simpler package that others might find useful. 
