@@ -7,7 +7,7 @@
   
   <img src = "https://github.com/mprib/multiwebcam/assets/31831778/73636fdb-c5a1-4f29-af7d-418a1072b0be" width = "200">
 
-*Synchronized webcam recording to bootstrap low-cost/early-stage computer vision projects*
+*Concurrent webcam recording to bootstrap low-cost/early-stage computer vision projects*
 
 </div>
 
@@ -26,7 +26,7 @@ https://github.com/mprib/multiwebcam/assets/31831778/9eef8ada-cfce-4c7a-b6c1-5db
 
 # Introduction
 
-I needed a way to record synchronized video while prototyping a computer vision project ([caliscope](https://github.com/mprib/caliscope)). Extreme temporal and spatial precision were less important than getting something reasonable with a minimal budget. When conscientiously managed, USB webcams controlled via OpenCV can perform surprisingly well at this task. I have spun this functionality off into its own package to create a clear separation of concerns between data capture and data processing, while hopefully creating a simpler package that others might find useful. 
+I needed a cheap way to record concurrent frames while prototyping a computer vision project ([caliscope](https://github.com/mprib/caliscope)). Extreme precision was less important than getting something reasonable with a minimal budget. When conscientiously managed, USB webcams controlled via OpenCV can perform surprisingly well at this task. I have spun this functionality off into its own package to create a clear separation of concerns between data capture and data processing, while hopefully creating a simpler package that others might find useful. 
 
 If MultiWebCam (MWC) is close to what you need but not quite, please feel free to raise an issue and I'll see if I can incorporate your use case. These are the core functions that are currently implemented:
 
