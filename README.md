@@ -30,9 +30,9 @@ I needed a cheap way to record concurrent frames while prototyping a computer vi
 
 If MultiWebCam (MWC) is close to what you need but not quite, please feel free to raise an issue and I'll see if I can incorporate your use case. These are the core functions that are currently implemented:
 
-- Record synchronized frames from multiple webcams
+- Record concurrent frames from multiple webcams
 - Record from single webcams to pull single camera calibration video.
-- synchronize in real time to understand dropped frame rate
+- "time-align" frames in real time to understand dropped frame rate
 - include frame-by-frame time stamp history to facilitate off-line processing
 - easy adjustment of the following parameters:
   - resolution
