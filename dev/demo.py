@@ -1,16 +1,18 @@
 
-from multiwebcam.cameras.camera import Camera
-from multiwebcam.cameras.synchronizer import Synchronizer
-from multiwebcam.cameras.live_stream import LiveStream
 from queue import Queue
+
+from multiwebcam.cameras.camera import Camera
+from multiwebcam.cameras.live_stream import LiveStream
+from multiwebcam.cameras.synchronizer import Synchronizer
 from multiwebcam.interface import SyncPacket
 
 # create a camera...this will contain an openCV cap object
 # passing in verified resolutions keeps the camera from trying to 
 # figure out viable resolutions which can take a moment
-cam_0 = Camera(0, verified_resolutions=[(640,480), (1280,720)])
+# port is the same port taht openCV would assign
+cam_0 = Camera(port=0, verified_resolutions=[(640,480), (1280,720)])
 cam_0.size = (640,480)
-cam_1 = Camera(1, verified_resolutions=[(640,480), (1280,720)])
+cam_1 = Camera(port=1, verified_resolutions=[(640,480), (1280,720)])
 cam_1.size = (640,480)
 
 
@@ -21,7 +23,7 @@ stream_1 = LiveStream(camera=cam_1,fps_target=6)
 # organize a dictionary of streams
 streams = {0:stream_0, 1:stream_1}
 
-# pass that dict to the synchronizer
+# pass that dict to initialize the synchronizer
 syncr = Synchronizer(streams=streams)
 syncr.start()
 
