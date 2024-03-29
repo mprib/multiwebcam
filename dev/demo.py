@@ -21,7 +21,7 @@ stream_1 = LiveStream(camera=cam_1,fps_target=6)
 # organize a dictionary of streams
 streams = {0:stream_0, 1:stream_1}
 
-# pass that dict to the syncrhonizer
+# pass that dict to the synchronizer
 syncr = Synchronizer(streams=streams)
 syncr.start()
 
