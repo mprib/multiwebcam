@@ -25,7 +25,6 @@ streams = {0:stream_0, 1:stream_1}
 
 # pass that dict to initialize the synchronizer
 syncr = Synchronizer(streams=streams)
-syncr.start()
 
 # create a queue that the synchronizer can push output to
 sync_packet_q = Queue()
