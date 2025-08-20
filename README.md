@@ -1,4 +1,5 @@
-
+NOTE: I am archiving this project to focus on alternate workflows that could provide higher quality data capture while still at a reasonable cost.
+It will take me some time to have something to show for that, but I want people to know that I don't have the bandwidth currently to address any future issues raised on this repo.
 
 
 <div align="center">  
