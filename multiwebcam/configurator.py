@@ -119,9 +119,9 @@ class Configurator:
 
 if __name__ == "__main__":
     import rtoml
-    from multiwebcam import __app_dir__
+    from multiwebcam import APP_DIR
 
-    app_settings = rtoml.load(Path(__app_dir__, "settings.toml"))
+    app_settings = rtoml.load(Path(APP_DIR, "settings.toml"))
     recent_projects: list = app_settings["recent_projects"]
 
     recent_project_count = len(recent_projects)

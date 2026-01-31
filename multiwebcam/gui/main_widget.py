@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 import rtoml
 from PySide6.QtGui import QIcon, QAction
 from PySide6.QtCore import Qt
-from multiwebcam import __root__, __settings_path__
+from multiwebcam import __root__, SETTINGS_PATH
 from multiwebcam.session.session import LiveSession, SessionMode
 from multiwebcam.gui.log_widget import LogWidget
 from multiwebcam.configurator import Configurator
@@ -34,7 +34,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
 
-        self.app_settings = rtoml.load(__settings_path__)
+        self.app_settings = rtoml.load(SETTINGS_PATH)
 
         # Persistent parent widget
         self.persistent_parent = QWidget(self)
@@ -238,7 +238,7 @@ class MainWindow(QMainWindow):
             self.add_to_recent_project(folder_path)
 
     def update_app_settings(self):
-        with open(__settings_path__, "w") as f:
+        with open(SETTINGS_PATH, "w") as f:
             rtoml.dump(self.app_settings, f)
 
 
