@@ -1,4 +1,4 @@
-import multiwebcam.logger
+import logging
 from pathlib import Path
 
 
@@ -27,7 +27,7 @@ from multiwebcam.gui.single_camera_widget import (
 from multiwebcam.gui.perf_counter_widget import PerfCounterWidget
 from multiwebcam.gui.multicamera_widget import MultiCameraWidget
 
-logger = multiwebcam.logger.get(__name__)
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -40,9 +40,7 @@ class MainWindow(QMainWindow):
         self.persistent_parent = QWidget(self)
 
         self.setWindowTitle("multiwebcam")
-        self.setWindowIcon(
-            QIcon(str(Path(__root__, "multiwebcam/gui/icons/tri-cam.svg")))
-        )
+        self.setWindowIcon(QIcon(str(Path(__root__, "multiwebcam/gui/icons/tri-cam.svg"))))
         self.setMinimumSize(500, 500)
 
         # File Menu
@@ -86,7 +84,9 @@ class MainWindow(QMainWindow):
         self.docked_logger = QDockWidget("Log", self)
 
         # Add DockWidgetClosable feature
-        self.docked_logger.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable | QDockWidget.DockWidgetFeature.DockWidgetClosable)
+        self.docked_logger.setFeatures(
+            QDockWidget.DockWidgetFeature.DockWidgetMovable | QDockWidget.DockWidgetFeature.DockWidgetClosable
+        )
         self.docked_logger.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea)
 
         self.log_widget = LogWidget()
@@ -133,23 +133,19 @@ class MainWindow(QMainWindow):
         This will be triggered whenever the session successfully completes a mode change and emits
         a signal to that effect.
         """
-        
+
         self.open_project_dir_action.setEnabled(True)
         logger.info("Begin process of updating central widget")
         logger.info(f"Matching next tab to active session mode: {self.session.mode}")
         # Create the new central widget based on the mode
         match self.session.mode:
             case SessionMode.SingleCamera:
-                self.single_camera_widget = SingleCameraWidget(
-                    self.session, parent=self.persistent_parent
-                )
+                self.single_camera_widget = SingleCameraWidget(self.session, parent=self.persistent_parent)
                 logger.info("Setting camera setup widget to central widget")
                 self.setCentralWidget(self.single_camera_widget)
             case SessionMode.MultiCamera:
                 logger.info("Setting multirecording widget to central widget")
-                self.multicamera_widget = MultiCameraWidget(
-                    self.session, parent=self.persistent_parent
-                )
+                self.multicamera_widget = MultiCameraWidget(self.session, parent=self.persistent_parent)
                 logger.info("Setting multirecording widget to central widget")
                 self.setCentralWidget(self.multicamera_widget)
 
@@ -176,17 +172,13 @@ class MainWindow(QMainWindow):
     def load_stream_tools(self):
         self.connect_cameras_action.setEnabled(False)
         self.disconnect_cameras_action.setEnabled(True)
-        self.thread = Thread(
-            target=self.session.load_stream_tools, args=(), daemon=True
-        )
+        self.thread = Thread(target=self.session.load_stream_tools, args=(), daemon=True)
         self.thread.start()
 
     def launch_session(self, path_to_folder: str):
         self.workspace_dir = Path(path_to_folder)
         self.config = Configurator(self.workspace_dir)
-        logger.info(
-            f"Launching session with config file stored in {self.workspace_dir}"
-        )
+        logger.info(f"Launching session with config file stored in {self.workspace_dir}")
         self.session = LiveSession(self.config)
         self.session.load_stream_tools()  # defaults to multicam state
         self.connect_session_signals()  # must be connected for mode change signal to build central widget
@@ -207,9 +199,7 @@ class MainWindow(QMainWindow):
         """
         self.session.mode_change_success.connect(self.update_central_widget_mode)
         self.session.stream_tools_loaded_signal.connect(self.update_enable_disable)
-        self.session.stream_tools_disconnected_signal.connect(
-            self.update_enable_disable
-        )
+        self.session.stream_tools_disconnected_signal.connect(self.update_enable_disable)
         self.session.mode_change_success.connect(self.update_enable_disable)
 
     def add_to_recent_project(self, project_path: str):

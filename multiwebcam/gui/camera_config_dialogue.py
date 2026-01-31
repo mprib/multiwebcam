@@ -1,4 +1,4 @@
-import multiwebcam.logger
+import logging
 
 from pathlib import Path
 from threading import Thread
@@ -11,25 +11,18 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QComboBox,
     QGridLayout,
-    QCheckBox,
-    QDialog,
     QGroupBox,
-    QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QSlider,
-    QVBoxLayout,
 )
 
 # Append main repo to top of path to allow import of backend
-from multiwebcam.gui.frame_emitter import FrameEmitter
-from multiwebcam.cameras.camera import Camera
-from multiwebcam.cameras.live_stream import LiveStream
 from multiwebcam.session.session import LiveSession
 from multiwebcam import __root__
 
-logger = multiwebcam.logger.get(__name__)
+logger = logging.getLogger(__name__)
 
 
 class CameraConfigTab(QWidget):
@@ -100,7 +93,7 @@ class CameraConfigTab(QWidget):
 
         self.update_fps_target()
         self.fps_display = QLabel()
-        
+
         self.place_widgets()
         self.connect_widgets()
 
@@ -129,14 +122,13 @@ class CameraConfigTab(QWidget):
         # self.ignore_box.stateChanged.connect(self.ignore_cam)
         self.record_btn.clicked.connect(self.start_stop_record)
         self.session.single_recording_complete.connect(self.enable_recording)
-    
 
     def place_widgets(self):
         grid_layout = QGridLayout()  # Create a new QGridLayout
 
         # Adding frame_display with stretch on either side
 
-        grid_layout.addWidget(self.frame_display, 0,1,1,2) # span 1 row and 2 columns
+        grid_layout.addWidget(self.frame_display, 0, 1, 1, 2)  # span 1 row and 2 columns
         grid_layout.setColumnStretch(0, 1)  # Left stretch
         grid_layout.setColumnStretch(3, 1)  # Right stretch
 
@@ -145,7 +137,7 @@ class CameraConfigTab(QWidget):
         frame_controls.addWidget(self.cw_rotation_btn)
         frame_controls.addWidget(self.ccw_rotation_btn)
         frame_controls.addWidget(self.resolution_combo)
-        grid_layout.addLayout(frame_controls,1,1, 1,2)
+        grid_layout.addLayout(frame_controls, 1, 1, 1, 2)
 
         # Adding exposure widgets
         exposure_controls = QGroupBox("Exposure")
@@ -165,7 +157,7 @@ class CameraConfigTab(QWidget):
         fps_hbox_layout.addWidget(self.frame_rate_spin)
         fps_hbox_layout.addWidget(self.fps_display)
 
-        grid_layout.addWidget(fps_grp, 2, 2)  
+        grid_layout.addWidget(fps_grp, 2, 2)
         grid_layout.addWidget(self.record_btn, 3, 1)  # Positioned at the center
 
         self.setLayout(grid_layout)  # Set the layout to the grid layout
@@ -199,15 +191,13 @@ class CameraConfigTab(QWidget):
             self.record_btn.setEnabled(False)
             self.session.stop_single_stream_recording()
 
-
-    def interface_enabled(self, enabled:bool):
+    def interface_enabled(self, enabled: bool):
         self.exp_slider.setEnabled(enabled)
         self.ccw_rotation_btn.setEnabled(enabled)
         self.cw_rotation_btn.setEnabled(enabled)
         self.frame_rate_spin.setEnabled(enabled)
         self.resolution_combo.setEnabled(enabled)
-         
-    
+
     def save_camera(self):
         # normally wouldn't bother with a one-liner function, but it makes connecting
         # to the signal more straightforward

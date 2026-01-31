@@ -1,4 +1,3 @@
-from time import sleep
 import math
 from pathlib import Path
 from threading import Thread
@@ -21,9 +20,9 @@ from PySide6.QtWidgets import (
 
 from multiwebcam.session.session import LiveSession
 from multiwebcam.cameras.synchronizer import Synchronizer
-import multiwebcam.logger
+import logging
 
-logger = multiwebcam.logger.get(__name__)
+logger = logging.getLogger(__name__)
 # Whatever the target frame rate, the GUI will only display a portion of the actual frames
 # this is done to cut down on computational overhead.
 RENDERED_FPS = 6
@@ -42,16 +41,15 @@ class MultiCameraWidget(QWidget):
         self.synchronizer: Synchronizer = self.session.synchronizer
         self.ports = self.synchronizer.ports
 
-
         # create tools to build and emit the displayed frame
         self.thumbnail_emitter = self.session.multicam_frame_emitter
 
         self.frame_rate_spin = QSpinBox()
         self.frame_rate_spin.setValue(self.session.fps_target)
         self.frame_rate_spin.setMaximumWidth(50)
-   
+
         self.render_rate_spin = QSpinBox()
-        self.render_rate_spin.setValue(self.session.multicam_render_fps) 
+        self.render_rate_spin.setValue(self.session.multicam_render_fps)
         self.render_rate_spin.setMaximumWidth(50)
 
         self.next_action = NextRecordingActions.StartRecording
@@ -84,13 +82,9 @@ class MultiCameraWidget(QWidget):
 
     def get_next_recording_directory(self):
         folders = [item.name for item in self.session.path.iterdir() if item.is_dir()]
-        recording_folders = [
-            folder for folder in folders if folder.startswith("recording_")
-        ]
+        recording_folders = [folder for folder in folders if folder.startswith("recording_")]
         recording_counts = [folder.split("_")[1] for folder in recording_folders]
-        recording_counts = [
-            int(rec_count) for rec_count in recording_counts if rec_count.isnumeric()
-        ]
+        recording_counts = [int(rec_count) for rec_count in recording_counts if rec_count.isnumeric()]
 
         if len(recording_counts) == 0:
             next_directory = "recording_1"
@@ -115,7 +109,9 @@ class MultiCameraWidget(QWidget):
         # Rendered Rate layout
         rendered_rate_layout = QHBoxLayout()
         rendered_rate_label = QLabel("Rendered Rate:")
-        rendered_rate_label.setToolTip("Manages the rate the GUI refreshes. Reduce this to free up system resources for recording at Target FPS.")
+        rendered_rate_label.setToolTip(
+            "Manages the rate the GUI refreshes. Reduce this to free up system resources for recording at Target FPS."
+        )
         rendered_rate_layout.addWidget(rendered_rate_label, alignment=Qt.AlignmentFlag.AlignRight)
         rendered_rate_layout.addWidget(self.render_rate_spin, alignment=Qt.AlignmentFlag.AlignLeft)
         self.settings_layout.addLayout(rendered_rate_layout)
@@ -156,15 +152,15 @@ class MultiCameraWidget(QWidget):
         frame_display_layout.addStretch(1)
         frame_display_layout.addLayout(frame_grid)
         frame_display_layout.addStretch(1)
-        
+
         scroll_view = QWidget()
-        scroll_view.setLayout(frame_display_layout)        
+        scroll_view.setLayout(frame_display_layout)
         self.scroll_area = QScrollArea()
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setWidget(scroll_view)
-        
+
         self.layout().addWidget(self.scroll_area)
         # self.layout().addLayout(frame_display_layout)
 
@@ -175,14 +171,10 @@ class MultiCameraWidget(QWidget):
         self.thumbnail_emitter.dropped_fps.connect(self.update_dropped_fps)
         self.start_stop.clicked.connect(self.toggle_start_stop)
         self.session.fps_target_updated.connect(self.update_fps_target)
-        self.session.multi_recording_complete_signal.connect(
-            self.on_recording_complete
-        )
+        self.session.multi_recording_complete_signal.connect(self.on_recording_complete)
 
     def toggle_start_stop(self):
-        logger.info(
-            f"Start/Stop Recording Toggled... Current state: {self.next_action}"
-        )
+        logger.info(f"Start/Stop Recording Toggled... Current state: {self.next_action}")
 
         if self.next_action == NextRecordingActions.StartRecording:
             self.next_action = NextRecordingActions.StopRecording
@@ -190,9 +182,7 @@ class MultiCameraWidget(QWidget):
             self.recording_directory.setEnabled(False)
 
             logger.info("Initiate recording")
-            recording_path: Path = Path(
-                self.session.path, self.recording_directory.text()
-            )
+            recording_path: Path = Path(self.session.path, self.recording_directory.text())
             self.session.start_synchronized_recording(recording_path)
 
         elif self.next_action == NextRecordingActions.StopRecording:
@@ -209,9 +199,7 @@ class MultiCameraWidget(QWidget):
             logger.info("Recording button toggled while awaiting save")
 
     def on_recording_complete(self):
-        logger.info(
-            "Recording complete signal received...updating next action and button"
-        )
+        logger.info("Recording complete signal received...updating next action and button")
         self.next_action = NextRecordingActions.StartRecording
         self.start_stop.setText(self.next_action.value)
         logger.info("Enabling start/stop recording button")
@@ -220,9 +208,7 @@ class MultiCameraWidget(QWidget):
         next_recording = self.get_next_recording_directory()
         self.recording_directory.setEnabled(True)
         self.recording_directory.setText(next_recording)
-        logger.info(
-            f"Successfully reset text and renamed recording directory to {next_recording}"
-        )
+        logger.info(f"Successfully reset text and renamed recording directory to {next_recording}")
         # pass
 
     def update_fps_target(self):
@@ -244,4 +230,3 @@ class MultiCameraWidget(QWidget):
             logger.debug("About to set qpixmap to display")
             self.recording_displays[port].setPixmap(qpixmap)
             logger.debug("successfully set display")
-

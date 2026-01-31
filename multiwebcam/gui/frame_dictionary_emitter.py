@@ -8,15 +8,16 @@ from PySide6.QtGui import QImage
 
 from multiwebcam.cameras.synchronizer import Synchronizer
 from multiwebcam.interface import FramePacket
-import multiwebcam.logger
+import logging
 
-logger = multiwebcam.logger.get(__name__)
+logger = logging.getLogger(__name__)
+
 
 class FrameDictionaryEmitter(QThread):
     ThumbnailImagesBroadcast = Signal(dict)
     dropped_fps = Signal(dict)
 
-    def __init__(self, synchronizer: Synchronizer, render_fps,  single_frame_height=300):
+    def __init__(self, synchronizer: Synchronizer, render_fps, single_frame_height=300):
         super(FrameDictionaryEmitter, self).__init__()
         self.single_frame_height = single_frame_height
         self.synchronizer = synchronizer
@@ -25,8 +26,9 @@ class FrameDictionaryEmitter(QThread):
         self.keep_collecting = Event()
         self.start()
 
-    def update_render_fps(self,fps):
-        self.render_fps = fps 
+    def update_render_fps(self, fps):
+        self.render_fps = fps
+
     def run(self):
         self.keep_collecting.set()
 
@@ -43,25 +45,18 @@ class FrameDictionaryEmitter(QThread):
                 frame_packet = self.current_sync_packet.frame_packets[port]
                 rotation_count = self.synchronizer.streams[port].camera.rotation_count
 
-                text_frame = frame_packet_2_thumbnail(
-                    frame_packet, rotation_count, self.single_frame_height, port
-                )
+                text_frame = frame_packet_2_thumbnail(frame_packet, rotation_count, self.single_frame_height, port)
                 q_image = cv2_to_qimage(text_frame)
                 thumbnail_qimage[str(port)] = q_image
 
             self.ThumbnailImagesBroadcast.emit(thumbnail_qimage)
 
-            dropped_fps_dict = {
-                str(port): dropped
-                for port, dropped in self.synchronizer.dropped_fps.items()
-            }
+            dropped_fps_dict = {str(port): dropped for port, dropped in self.synchronizer.dropped_fps.items()}
             self.dropped_fps.emit(dropped_fps_dict)
         logger.info("Recording thumbnail emitter run thread ended...")
 
 
-def frame_packet_2_thumbnail(
-    frame_packet: FramePacket, rotation_count: int, edge_length: int, port: int
-):
+def frame_packet_2_thumbnail(frame_packet: FramePacket, rotation_count: int, edge_length: int, port: int):
     raw_frame = get_frame_or_blank(frame_packet, edge_length)
     # port = frame_packet.port
 
@@ -161,7 +156,6 @@ def prep_img_for_qpixmap(image: np.ndarray):
     return image
 
 
-
 def cv2_to_qimage(frame):
     image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
@@ -173,6 +167,3 @@ def cv2_to_qimage(frame):
     )
 
     return qt_frame
-
-
-

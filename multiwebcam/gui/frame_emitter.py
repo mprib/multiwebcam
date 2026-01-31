@@ -1,18 +1,15 @@
+import logging
 
-import multiwebcam.logger
-
-from datetime import datetime
-from pathlib import Path
-from time import sleep
 from threading import Event
 from queue import Queue
 
 import cv2
-from PySide6.QtCore import QSize, Qt, QThread, Signal
-from PySide6.QtGui import QFont, QIcon, QImage, QPixmap
+from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QImage, QPixmap
 from multiwebcam.cameras.live_stream import LiveStream
 
-logger = multiwebcam.logger.get(__name__)
+logger = logging.getLogger(__name__)
+
 
 class FrameEmitter(QThread):
     # establish signals from the frame that will be displayed in real time
@@ -20,7 +17,7 @@ class FrameEmitter(QThread):
     ImageBroadcast = Signal(QPixmap)
     FPSBroadcast = Signal(float)
 
-    def __init__(self, stream:LiveStream, pixmap_edge_length=None):
+    def __init__(self, stream: LiveStream, pixmap_edge_length=None):
         # pixmap_edge length is from the display window. Keep the display area
         # square to keep life simple.
         super(FrameEmitter, self).__init__()
@@ -36,7 +33,7 @@ class FrameEmitter(QThread):
 
     def subscribe(self):
         self.stream.subscribe(self.in_q)
-            
+
     def unsubscribe(self):
         self.stream.unsubscribe(self.in_q)
 
@@ -45,7 +42,7 @@ class FrameEmitter(QThread):
 
         while self.keep_collecting.is_set():
             # Grab a frame from the queue and broadcast to displays
-            self.frame_packet  = self.in_q.get()
+            self.frame_packet = self.in_q.get()
             self.frame = self.frame_packet.frame
 
             self.frame = resize_to_square(self.frame)
@@ -61,7 +58,7 @@ class FrameEmitter(QThread):
                     Qt.AspectRatioMode.KeepAspectRatio,
                 )
             self.ImageBroadcast.emit(pixmap)
-            
+
             # moved to monocalibrator...delete if works well
             self.FPSBroadcast.emit(self.stream.FPS_actual)
 
@@ -95,9 +92,7 @@ class FrameEmitter(QThread):
             self.frame = cv2.rotate(self.frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
 
-
 def resize_to_square(frame):
-
     height = frame.shape[0]
     width = frame.shape[1]
 
@@ -118,6 +113,7 @@ def resize_to_square(frame):
     )
 
     return frame
+
 
 if __name__ == "__main__":
     pass

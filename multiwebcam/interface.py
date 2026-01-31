@@ -1,8 +1,5 @@
 from dataclasses import dataclass
 import numpy as np
-from queue import Queue
-from abc import ABC, abstractmethod
-import cv2
 
 
 # @dataclass(slots=True)
@@ -18,6 +15,7 @@ class FramePacket:
     frame_time: float
     frame: np.ndarray
     fps: float
+
 
 @dataclass(frozen=True, slots=True)
 class SyncPacket:
@@ -40,12 +38,11 @@ class SyncPacket:
             else:
                 temp_dict[port] = 0
         return temp_dict
-    
+
     @property
     def frame_packet_count(self):
         count = 0
         for port, packet in self.frame_packets.items():
             if packet is not None:
-                 count+= 1
+                count += 1
         return count
-        

@@ -6,13 +6,13 @@ import cv2
 
 from multiwebcam.cameras.live_stream import LiveStream
 from multiwebcam.interface import FramePacket
-import multiwebcam.logger
+import logging
 
-logger = multiwebcam.logger.get(__name__)
+logger = logging.getLogger(__name__)
 
 
 class SingleVideoRecorder:
-    def __init__(self, stream:LiveStream):
+    def __init__(self, stream: LiveStream):
         """
         suffix: provide a way to clarify any modifications to the video that are being saved
         This is likely going to be the name of the tracker used in most cases
@@ -25,15 +25,13 @@ class SingleVideoRecorder:
         self.trigger_stop = Event()
         self.frame_packet_in_q = Queue(-1)
 
-    def save_data_worker( self ):
+    def save_data_worker(self):
         # connect video recorder to synchronizer via an "in" queue
         path = str(Path(self.destination_folder, f"port_{self.port}.mp4"))
         logger.info(f"Building video writer for port {self.port}; recording to {path}")
         fourcc = cv2.VideoWriter_fourcc(*"MP4V")
         frame_size = self.stream.size
-        logger.info(
-            f"Creating video writer with fps of {self.stream.fps_target} and frame size of {frame_size}"
-        )
+        logger.info(f"Creating video writer with fps of {self.stream.fps_target} and frame size of {frame_size}")
         self.video_writer = cv2.VideoWriter(path, fourcc, self.stream.fps_target, frame_size)
 
         stream_subscription_released = False
@@ -48,9 +46,7 @@ class SingleVideoRecorder:
             # logger.info("Getting size of sync packet q")
             backlog = self.frame_packet_in_q.qsize()
             if backlog % 25 == 0 and backlog != 0:
-                logger.info(
-                    f"Size of unsaved frames on the recording queue is {self.frame_packet_in_q.qsize()}"
-                )
+                logger.info(f"Size of unsaved frames on the recording queue is {self.frame_packet_in_q.qsize()}")
 
             if frame_packet is None:
                 # relenvant when
@@ -68,7 +64,6 @@ class SingleVideoRecorder:
         self.video_writer.release()
         self.trigger_stop.clear()  # reset stop recording trigger
         self.recording = False
-
 
     def start_recording(
         self,

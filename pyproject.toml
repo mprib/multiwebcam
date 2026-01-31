@@ -1,25 +1,75 @@
-[tool.poetry]
+[project]
 name = "multiwebcam"
-version = "0.1.2"
+version = "0.2.0"
 description = "Record synchronized webcam footage"
-authors = ["Mac Prible <prible@gmail.com>"]
-license = "BSD-2-Clause"
+authors = [{name = "Mac Prible", email = "prible@gmail.com"}]
+license = { text = "BSD-2-Clause" }
 readme = "README.md"
+requires-python = ">=3.10,<3.13"
 
-[tool.poetry.dependencies]
-python =  ">=3.10,<3.13"
-PySide6 = "^6.6.1"
-opencv-contrib-python = "^4.8.1.78"
-rtoml = "^0.9.0"
-pandas = "^2.1.4"
+dependencies = [
+    "PySide6>=6.6.1",
+    "opencv-contrib-python>=4.8.1",
+    "rtoml>=0.9.0",
+    "pandas>=2.1.4",
+    "platformdirs>=4.0.0",
+]
 
+[project.urls]
+repository = "https://github.com/mprib/multiwebcam"
 
-[tool.poetry.group.dev.dependencies]
-ipykernel = "^6.28.0"
+[project.scripts]
+mwc = "multiwebcam.__main__:CLI_parser"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry.scripts]
-mwc = "multiwebcam.__main__:CLI_parser"
+[tool.hatch.build.targets.wheel]
+packages = ["multiwebcam"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+unsafe-fixes = true
+exclude = [
+    ".git",
+    ".venv",
+    "__pypackages__",
+    "build",
+    "dist",
+    "dev",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+
+[tool.basedpyright]
+typeCheckingMode = "basic"
+exclude = ["dist", "build", ".venv", "dev"]
+reportMissingTypeStubs = false
+reportAny = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.3.0",
+    "ipykernel>=6.22.0",
+    "ruff>=0.6.5",
+    "basedpyright>=1.18.0",
+]

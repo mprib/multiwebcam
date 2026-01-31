@@ -1,11 +1,8 @@
-
-import multiwebcam.logger
 import logging
 
 from pathlib import Path
 from queue import Queue
 from threading import Thread, Event
-import rtoml
 
 import cv2
 from time import perf_counter, sleep
@@ -13,10 +10,8 @@ import pandas as pd
 import numpy as np
 
 from multiwebcam.interface import FramePacket, Tracker, Stream
-from multiwebcam.cameras.camera_array import CameraData
-from multiwebcam.configurator import Configurator
 
-logger = multiwebcam.logger.get(__name__)
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
@@ -53,9 +48,9 @@ class RecordedStream(Stream):
         if fps_target is None:
             fps_target = self.original_fps
 
-        width =  int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.size = (width,height)
+        self.size = (width, height)
 
         self.stop_event = Event()
         self._jump_q = Queue(maxsize=1)
@@ -69,13 +64,9 @@ class RecordedStream(Stream):
         if synched_frames_history_path.exists():
             synched_frames_history = pd.read_csv(synched_frames_history_path)
 
-            self.port_history = synched_frames_history[
-                synched_frames_history["port"] == self.port
-            ]
+            self.port_history = synched_frames_history[synched_frames_history["port"] == self.port]
 
-            self.port_history["frame_index"] = (
-                self.port_history["frame_time"].rank(method="min").astype(int) - 1
-            )
+            self.port_history["frame_index"] = self.port_history["frame_time"].rank(method="min").astype(int) - 1
 
         ########### INFER TIME STAMP IF NOT AVAILABLE ####################################
         else:
@@ -99,7 +90,7 @@ class RecordedStream(Stream):
     # def set_tracking_on(self, track: bool):
     #     if track:
     #         logger.info(f"Turning tracking on for recorded stream {self.port}")
-    #         self.track_points = 
+    #         self.track_points =
     #     else:
     #         logger.info(f"Turning tracking off for recorded stream {self.port}")
     #         self.track_points.clear()
@@ -110,19 +101,13 @@ class RecordedStream(Stream):
             self.subscribers.append(queue)
             logger.info(f"...now {len(self.subscribers)} subscriber(s) at {self.port}")
         else:
-            logger.warn(
-                f"Attempted to subscribe to recorded stream at port {self.port} twice"
-            )
+            logger.warn(f"Attempted to subscribe to recorded stream at port {self.port} twice")
 
     def unsubscribe(self, queue: Queue):
         if queue in self.subscribers:
-            logger.info(
-                f"Removing subscriber from queue at recorded stream {self.port}"
-            )
+            logger.info(f"Removing subscriber from queue at recorded stream {self.port}")
             self.subscribers.remove(queue)
-            logger.info(
-                f"{len(self.subscribers)} subscriber(s) remain at recorded stream {self.port}"
-            )
+            logger.info(f"{len(self.subscribers)} subscriber(s) remain at recorded stream {self.port}")
         else:
             logger.warn(
                 f"Attempted to unsubscribe to recorded stream that was not subscribed to\
@@ -199,19 +184,14 @@ class RecordedStream(Stream):
 
             if self.milestones is not None:
                 sleep(self.wait_to_next_frame())
-            logger.debug(
-                f"about to read frame {self.frame_index} from capture at port {self.port}"
-            )
+            logger.debug(f"about to read frame {self.frame_index} from capture at port {self.port}")
             success, self.frame = self.capture.read()
 
             if not success:
                 break
 
-
             if self.tracker is not None:
-                self.point_data = self.tracker.get_points(
-                    self.frame, self.port, self.rotation_count
-                )
+                self.point_data = self.tracker.get_points(self.frame, self.port, self.rotation_count)
                 draw_instructions = self.tracker.draw_instructions
             else:
                 self.point_data = None
@@ -273,8 +253,5 @@ class RecordedStream(Stream):
             ############
             if not self._jump_q.empty():
                 self.frame_index = self._jump_q.get()
-                logger.info(
-                    f"Setting port {self.port} capture object to frame index {self.frame_index}"
-                )
+                logger.info(f"Setting port {self.port} capture object to frame index {self.frame_index}")
                 self.capture.set(cv2.CAP_PROP_POS_FRAMES, self.frame_index)
-

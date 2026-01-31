@@ -3,8 +3,9 @@ import time
 import os
 
 import cv2
-import multiwebcam.logger
-logger = multiwebcam.logger.get(__name__)
+import logging
+
+logger = logging.getLogger(__name__)
 
 TEST_FRAME_COUNT = 10
 MIN_RESOLUTION_CHECK = 200
@@ -12,26 +13,24 @@ MAX_RESOLUTION_CHECK = 10000
 
 
 class Camera:
-
     # https://docs.opencv.org/3.4/d4/d15/group__videoio__flags__base.html
     # see above for constants used to access properties
-    def __init__(self, port, verified_resolutions = None, backend = None):
-
+    def __init__(self, port, verified_resolutions=None, backend=None):
         if backend is not None:
             self.backend = backend
-            self.connect_API = CAMERA_BACKENDS[backend] 
+            self.connect_API = CAMERA_BACKENDS[backend]
         else:
-            if os.name == 'nt': #windows
+            if os.name == "nt":  # windows
                 self.backend = "CAP_DSHOW"
                 self.connect_API = cv2.CAP_DSHOW
-            else: # UNIX variant
+            else:  # UNIX variant
                 self.backend = "CAP_ANY"
                 self.connect_API = cv2.CAP_ANY
 
         # check if source has a data feed before proceeding...if not it is
         # either in use or fake
-        logger.info(f"Attempting to connect video capture at port {port} with backend {self.backend} ({self.connect_API})")
-        test_capture = cv2.VideoCapture(port,self.connect_API)
+        logger.info(f"Attempting to connect at port {port} with backend {self.backend}")
+        test_capture = cv2.VideoCapture(port, self.connect_API)
         for _ in range(0, TEST_FRAME_COUNT):
             good_read, frame = test_capture.read()
 
@@ -41,18 +40,17 @@ class Camera:
             self.capture = test_capture
             self.active_port = True
             # limit buffer size so that you are always reading the latest frame
-            self.capture.set(
-                cv2.CAP_PROP_BUFFERSIZE, 1
-            )  # from https://stackoverflow.com/questions/58293187/opencv-real-time-streaming-video-capture-is-slow-how-to-drop-frames-or-getanother thread signaled a change to mediapipe overley-sync
+            # Limit buffer to 1 frame so we always read the latest
+            self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-            self.ignore = False # flag camera during single camera setup to be ignored in the future
+            self.ignore = False  # flag camera during single camera setup to be ignored in the future
 
             # sets orientation in the GUI, but otherwise does not affect the frame
             self.rotation_count = 0  # +1 for each 90 degree CW rotation, -1 for CCW
 
             self.set_exposure()
             self.set_default_resolution()
-        else: 
+        else:
             # probably busy
             logger.info(f"Camera at port {port} appears to be busy")
             self.port = port
@@ -61,7 +59,7 @@ class Camera:
             raise Exception(f"Not reading at port {port}...likely in use")
 
         # Test to see if camera is virtual
-        spoof_resolution = (599,599)
+        spoof_resolution = (599, 599)
         self.size = spoof_resolution
         if self.size == spoof_resolution:
             self.virtual_camera = True
@@ -97,9 +95,9 @@ class Camera:
         """Note that OpenCV appears to change the exposure value, but
         this is not read back accurately through the getter, so just
         track it manually after updating"""
-        if platform.system()=="Windows":
+        if platform.system() == "Windows":
             self.capture.set(cv2.CAP_PROP_EXPOSURE, value)
-        
+
         else:
             self.capture.set(cv2.CAP_PROP_IOS_DEVICE_EXPOSURE, value)
 
@@ -158,11 +156,10 @@ class Camera:
             # attempt to set the camera to the given resolution
             logger.info(f"Checking resolution of {resolution} at port {self.port}")
             self.size = resolution
-            
+
             # if it sticks, then that resolution is verified
             if resolution == self.size:
                 self.verified_resolutions.append(resolution)
-                
 
     def rotate_CW(self):
         if self.rotation_count == 3:
@@ -242,13 +239,12 @@ CAMERA_BACKENDS = {
     "CAP_ARAVIS": cv2.CAP_ARAVIS,
     "CAP_OPENCV_MJPEG": cv2.CAP_OPENCV_MJPEG,
     "CAP_INTEL_MFX": cv2.CAP_INTEL_MFX,
-    "CAP_XINE": cv2.CAP_XINE
+    "CAP_XINE": cv2.CAP_XINE,
 }
 
 ######################### TEST FUNCTIONALITY OF CAMERAS ########################
 if __name__ == "__main__":
-
-    cam = Camera(4, verified_resolutions=[(640,480), (1280,720)])
+    cam = Camera(4, verified_resolutions=[(640, 480), (1280, 720)])
     logger.info(f"Camera {cam.port} has possible resolutions: {cam.verified_resolutions}")
 
     for res in cam.verified_resolutions:
@@ -260,7 +256,7 @@ if __name__ == "__main__":
         logger.info(f"Setting camera size to {res}")
         cam.size = res
         logger.info("Resolution successfully updated...")
-            
+
         while True:
             success, frame = cam.capture.read()
             cv2.imshow(f"Resolution: {res}; press 'q' to move to next resolution", frame)
@@ -275,24 +271,24 @@ if __name__ == "__main__":
     #     time.sleep(.01)
 
     exposure_test_started = False
-    
+
     start_time = time.perf_counter()
-    
+
     while True:
         success, frame = cam.capture.read()
-        elapsed_seconds = int(time.perf_counter()-start_time)
+        elapsed_seconds = int(time.perf_counter() - start_time)
         logger.debug(f"{elapsed_seconds} seconds have elapsed since loop began")
 
         cv2.imshow("Exposure Test", frame)
-       
-        cam.exposure = -10+elapsed_seconds 
-         
+
+        cam.exposure = -10 + elapsed_seconds
+
         if cv2.waitKey(1) == ord("q"):
             cam.disconnect()
             cv2.destroyAllWindows()
-            break     
-        
+            break
+
         if elapsed_seconds > 10:
             cam.disconnect()
             cv2.destroyAllWindows()
-            break 
+            break

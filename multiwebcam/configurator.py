@@ -1,16 +1,16 @@
 # %%
 
-import multiwebcam.logger
+import logging
 
 from pathlib import Path
 from datetime import datetime
 from os.path import exists
 import rtoml
 
-from multiwebcam.cameras.camera import Camera, CAMERA_BACKENDS
+from multiwebcam.cameras.camera import Camera
 from concurrent.futures import ThreadPoolExecutor
 
-logger = multiwebcam.logger.get(__name__)
+logger = logging.getLogger(__name__)
 
 
 class Configurator:
@@ -30,9 +30,7 @@ class Configurator:
             if "camera_count" not in self.dict.keys():
                 self.dict["camera_count"] = 0
         else:
-            logger.info(
-                "No existing recording_config.toml found; creating starter file with charuco"
-            )
+            logger.info("No existing recording_config.toml found; creating starter file with charuco")
 
             self.dict = rtoml.loads("")
             self.dict["CreationDate"] = datetime.now()
@@ -40,7 +38,6 @@ class Configurator:
             self.dict["multicam_render_fps"] = 6
 
             self.update_config_toml()
-
 
     def save_camera_count(self, count):
         self.camera_count = count
@@ -53,24 +50,21 @@ class Configurator:
     def get_multicam_render_fps(self):
         return self.dict["multicam_render_fps"]
 
-    def save_multicam_render_fps(self,fps):
+    def save_multicam_render_fps(self, fps):
         self.dict["multicam_render_fps"] = fps
         self.update_config_toml()
 
     def get_fps_target(self):
         return self.dict["fps"]
 
-
-    def save_fps(self,fps_target):
+    def save_fps(self, fps_target):
         self.dict["fps"] = fps_target
         self.update_config_toml()
-        
 
     def refresh_config_from_toml(self):
         logger.info("Populating config dictionary with config.toml data")
         # with open(self.config_toml_path, "r") as f:
         self.dict = rtoml.load(self.config_toml_path)
-
 
     def update_config_toml(self):
         # alphabetize by key to maintain standardized layout
@@ -81,7 +75,6 @@ class Configurator:
             rtoml.dump(self.dict, f)
 
     def save_camera(self, camera: Camera):
-
         params = {
             "port": camera.port,
             "size": camera.size,
@@ -89,17 +82,16 @@ class Configurator:
             "rotation_count": camera.rotation_count,
             "ignore": camera.ignore,
             "verified_resolutions": camera.verified_resolutions,
-            "backend": camera.backend
+            "backend": camera.backend,
         }
 
         self.dict["cam_" + str(camera.port)] = params
         self.update_config_toml()
 
-
     def get_cameras(self) -> dict[int, Camera]:
         cameras = {}
 
-        def add_preconfigured_cam(params:dict):
+        def add_preconfigured_cam(params: dict):
             # try:
             port = params["port"]
             logger.info(f"Attempting to add pre-configured camera at port {port}")
@@ -114,8 +106,8 @@ class Configurator:
                 camera = Camera(port=port, verified_resolutions=verified_resolutions, backend=backend)
                 camera.rotation_count = params["rotation_count"]
                 camera.exposure = params["exposure"]
-                cameras[port] = camera 
-                
+                cameras[port] = camera
+
         with ThreadPoolExecutor() as executor:
             for key, params in self.dict.items():
                 if key.startswith("cam"):

@@ -3,7 +3,7 @@
 # that reads in frames.
 
 
-import multiwebcam.logger
+import logging
 
 from time import perf_counter, sleep
 from queue import Queue
@@ -15,9 +15,10 @@ import numpy as np
 from multiwebcam.cameras.camera import Camera
 from multiwebcam.interface import FramePacket
 
-logger = multiwebcam.logger.get(__name__)
+logger = logging.getLogger(__name__)
 
-class LiveStream():
+
+class LiveStream:
     def __init__(self, camera: Camera, fps_target: int = 6):
         self.camera: Camera = camera
         self.port = camera.port
@@ -32,7 +33,6 @@ class LiveStream():
 
         self._show_fps = False  # used for testing
 
-
         self.set_fps_target(fps_target)
         self.FPS_actual = 0
         # Start the thread to read frames from the video stream
@@ -45,7 +45,7 @@ class LiveStream():
 
     @property
     def size(self):
-        # because the camera resolution will potentially change after stream initialization, this should be 
+        # because the camera resolution will potentially change after stream initialization, this should be
         # read directly from the camera whenever a caller (e.g. videorecorder) wants the current resolution
         return self.camera.size
 
@@ -55,25 +55,21 @@ class LiveStream():
             self.subscribers.append(queue)
             logger.info(f"...now {len(self.subscribers)} subscriber(s) at {self.port}")
         else:
-            logger.warn(
-                f"Attempted to subscribe to live stream at port {self.port} twice"
-            )
+            logger.warn(f"Attempted to subscribe to live stream at port {self.port} twice")
 
     def unsubscribe(self, queue: Queue):
         try:
             if queue in self.subscribers:
                 logger.info(f"Removing subscriber from queue at port {self.port}")
                 self.subscribers.remove(queue)
-                logger.info(
-                    f"{len(self.subscribers)} subscriber(s) remain at port {self.port}"
-                )
+                logger.info(f"{len(self.subscribers)} subscriber(s) remain at port {self.port}")
             else:
                 logger.warn(
                     f"Attempted to unsubscribe to live stream that was not subscribed to\
                     at port {self.port} twice"
                 )
-        except:
-            logger.warn("Attempted to remove queue that may have been removed twice at once")
+        except KeyError:
+            logger.warning("Attempted to remove queue that may have been removed twice at once")
 
     def set_fps_target(self, fps_target):
         """
@@ -145,14 +141,14 @@ class LiveStream():
                         logger.info(f"Spinlock initiated at port {self.port}")
                         spinlock_looped = True
                     sleep(0.5)
-                if spinlock_looped == True:
+                if spinlock_looped:
                     logger.info(f"Spinlock released at port {self.port}")
 
                 # Wait an appropriate amount of time to hit the frame rate target
                 sleep(self.wait_to_next_frame())
 
                 read_start = perf_counter()
-                grab_success = self.camera.capture.grab()
+                self.camera.capture.grab()
                 self.success, self.frame = self.camera.capture.retrieve()
 
                 read_stop = perf_counter()
@@ -170,9 +166,9 @@ class LiveStream():
                     frame_packet = FramePacket(
                         port=self.port,
                         frame_time=self.frame_time,
-                        frame_index= self.frame_index,
+                        frame_index=self.frame_index,
                         frame=self.frame,
-                        fps = self.FPS_actual
+                        fps=self.FPS_actual,
                     )
 
                     # cv2.imshow(str(self.port), frame_packet.frame_with_points)
@@ -184,7 +180,7 @@ class LiveStream():
                     for q in self.subscribers:
                         q.put(frame_packet)
 
-                self.frame_index +=1
+                self.frame_index += 1
 
         logger.info(f"Stream stopped at port {self.port}")
         self.stop_event.clear()
@@ -207,9 +203,7 @@ class LiveStream():
 
         self.camera.size = res
         # Spin up the thread again now that resolution is changed
-        logger.info(
-            f"Beginning roll_camera thread at port {self.port} with resolution {res}"
-        )
+        logger.info(f"Beginning roll_camera thread at port {self.port} with resolution {res}")
         self.thread = Thread(target=self._play_worker, args=(), daemon=True)
         self.thread.start()
 

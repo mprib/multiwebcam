@@ -1,12 +1,14 @@
+import logging
 import sys
-import os
-from PySide6.QtWidgets import QApplication
-from pathlib import Path
 
-from multiwebcam.gui.main_widget import launch_main
-import multiwebcam.logger
+from multiwebcam.logger import setup_logging
 
-logger = multiwebcam.logger.get(__name__)
+# Configure logging before any other imports that might log
+setup_logging()
+
+logger = logging.getLogger(__name__)
+
+from multiwebcam.gui.main_widget import launch_main  # noqa: E402
 
 
 def CLI_parser():

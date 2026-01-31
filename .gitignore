@@ -3,3 +3,14 @@
 dist*
 .vscode*
 *.lock
+
+# Claude Code
+.claude/
+
+# Working documents (symlinked from dotfiles)
+tasks.json
+progress.txt
+CLAUDE.md
+
+# Test artifacts
+tests/tmp/
