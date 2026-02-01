@@ -97,6 +97,26 @@ Native format (no conversion) is ~0.1ms - ten times faster, but outputs 2-channe
 
 ## USB Troubleshooting Guide
 
+### Live USB Monitoring
+
+The most useful debugging tool for USB issues:
+
+```bash
+sudo dmesg -w
+```
+
+This watches kernel messages in real-time. Plug/unplug devices and watch what happens:
+
+| Message | Meaning |
+|---------|---------|
+| `New USB device found, idVendor=...` | Device detected, enumeration starting |
+| `Found UVC 1.00 device <name>` | Camera driver attached successfully |
+| `device descriptor read/64, error -71` | Electrical/cable issue |
+| `device not accepting address` | Power or signal integrity problem |
+| `cannot set alt` or `No space left on device` | Bandwidth exhaustion |
+| `GET_CABLE_PROPERTY failed (-5)` | USB-C PD negotiation issue (often harmless) |
+| (nothing at all) | Port may be dead or disabled |
+
 ### Camera Not Detected?
 
 **Step 1: Check USB-level detection**
@@ -125,6 +145,22 @@ Device nodes can persist after camera disconnects. Opening a stale node gives "N
 | "No such device" on existing `/dev/video*` | Stale device node | Re-enumerate with `v4l2-ctl --list-devices` |
 | Works in one port, not another | Bad port or bandwidth contention | Try different port, avoid USB hubs |
 | Intermittent detection | Power delivery issue | Use powered hub, avoid daisy-chaining |
+| Camera not detected via USB-C adapter | Connection order issue | See below |
+
+### USB-C Adapter Connection Order
+
+When using USB-C to USB-A adapters, **connection order matters**:
+
+**Fails**: Plug adapter into port first, then plug camera into adapter
+- Port negotiates with empty adapter
+- Camera hot-plugs into already-negotiated adapter
+- Enumeration often fails silently
+
+**Works**: Connect camera to adapter first, then plug the whole assembly into port
+- Port sees complete device tree at once
+- Proper enumeration and power negotiation
+
+This is a USB-C Power Delivery quirk. The `GET_CABLE_PROPERTY failed (-5)` error in dmesg is a symptom but usually not fatal if the device eventually enumerates.
 
 ### USB Bandwidth
 
