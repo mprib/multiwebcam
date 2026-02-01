@@ -14,3 +14,6 @@ CLAUDE.md
 
 # Test artifacts
 tests/tmp/
+
+# Working scripts folder
+scripts/
