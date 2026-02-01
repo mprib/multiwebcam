@@ -358,9 +358,63 @@ Cheap webcams have fewer controls. The laptop webcam has no focus control (fixed
 
 ---
 
+## Timestamps (Phase 3)
+
+### PTS vs Wall-Clock
+
+**Observation** (Framework laptop, Linux 6.14, tested cameras): V4L2 provides hardware timestamps via PTS using the kernel's monotonic clock (time since system boot). On this hardware, PTS is comparable across cameras.
+
+Tested with laptop webcam and Logitech C930e:
+- `/dev/video0`: PTS = 88666.59s (24.630 hours since boot)
+- `/dev/video4`: PTS = 88668.02s (24.630 hours since boot)
+
+The ~1.4s difference is from opening cameras sequentially, not clock drift.
+
+**Caveat**: This behavior may vary by kernel version, camera driver, or hardware. Other systems might use stream-relative PTS (starting at 0 when camera opens).
+
+### Recommendation: Use PTS with Runtime Validation
+
+```python
+stream = container.streams.video[0]
+time_base = stream.time_base
+for frame in container.decode(video=0):
+    frame_time = float(frame.pts * time_base)  # seconds since boot (hopefully)
+```
+
+**Runtime validation** when opening multiple cameras:
+```python
+# After opening all cameras, check first PTS from each
+pts_values = [first_pts_seconds for each camera]
+spread = max(pts_values) - min(pts_values)
+if spread > 60:  # More than 60s apart = likely different epochs
+    logger.warning("PTS epochs differ across cameras, falling back to wall-clock")
+    use_wall_clock = True
+```
+
+### Why PTS (when validated)?
+
+| Aspect | PTS | perf_counter() |
+|--------|-----|----------------|
+| Epoch | System boot (on tested hardware) | Session start |
+| Cross-camera | Directly comparable (if same epoch) | Always comparable |
+| Timestamp point | Kernel capture time | Python decode time |
+| Latency included | No | USB transfer + decode |
+| Jitter source | Camera only | Camera + USB + Python |
+
+### Observed Timing Characteristics
+
+At 640x480 MJPEG 30fps (Logitech C930e):
+- Wall-clock interval: mean=33.9ms, std=2.0ms
+- PTS interval: mean=34.3ms, std=5.5ms
+- USB/decode latency: ~13ms average (measured as "drift")
+
+The higher PTS stddev includes occasional frame timing variations from the camera itself.
+
+---
+
 ## Open Questions
 
-- Hardware timestamps vs `perf_counter()` accuracy
+- ~~Hardware timestamps vs `perf_counter()` accuracy~~ (answered in Phase 3 - use PTS)
 - USB bandwidth limits for multi-camera 1080p30 (partially answered: jitter increases with load)
 - ~~MJPEG vs YUYV tradeoffs per camera~~ (answered in Phase 2)
 - ~~Frame timing jitter characteristics~~ (answered in Phase 2)
