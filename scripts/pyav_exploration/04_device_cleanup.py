@@ -13,6 +13,7 @@ import os
 import sys
 
 import av
+from av.error import FFmpegError
 
 
 def count_fds() -> int:
@@ -164,7 +165,7 @@ def test_reopen_after_close(device: str) -> bool:
         print(f"  Second open: grabbed frame {frame2.width}x{frame2.height}")
         container2.close()
         print("  Second close completed")
-    except av.AVError as e:
+    except FFmpegError as e:
         if "busy" in str(e).lower():
             print(f"  FAIL: Device busy on reopen - previous handle not fully released")
             print(f"  Error: {e}")

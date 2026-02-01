@@ -412,9 +412,83 @@ The higher PTS stddev includes occasional frame timing variations from the camer
 
 ---
 
+## Multi-Camera Stress Testing (Phase 4)
+
+### Test Configuration
+
+Framework laptop with 4 external cameras running simultaneously at 720p and 1080p MJPEG 30fps.
+
+### Camera Performance Summary
+
+| Camera | USB Controller | 720p FPS | 1080p FPS | Notes |
+|--------|----------------|----------|-----------|-------|
+| eMeet C960 #1 | c3:00.3 | 99.5% | 99.7% | Rock solid, cheapest option |
+| eMeet C960 #2 | c3:00.4 | 98.0% | 98.2% | Rock solid |
+| Logitech C930e | c1:00.3 | 97.7%* | 50%→97%* | *After fix (see below) |
+| Razer Kiyo Pro | c1:00.3 | 92.0% | 94.1% | ~350ms startup spike, then OK |
+| Laptop Webcam | c1:00.4 | - | 61.4% | Can't keep up at 1080p |
+
+### Critical Finding: exposure_dynamic_framerate
+
+The Logitech C930e was stuck at 15 fps until we discovered the `exposure_dynamic_framerate` setting was enabled. This V4L2 control allows the camera to drop framerate for better exposure in low light.
+
+**Symptom**: Camera reports 30fps capability but delivers 15fps consistently.
+
+**Fix**:
+```bash
+v4l2-ctl -d /dev/videoN --set-ctrl exposure_dynamic_framerate=0
+```
+
+**Check all cameras for this setting**:
+```bash
+v4l2-ctl -d /dev/videoN --all | grep exposure_dynamic_framerate
+```
+
+This setting persists only while the device is open. Must be set each time the camera is opened, or use udev rules for persistence.
+
+### USB Controller Sharing
+
+Cameras on the same USB controller share bandwidth. On Framework laptops, some expansion card slots internally route to the same controller.
+
+**Observed**: Razer + Logitech on `c1:00.3` competed for bandwidth at 1080p:
+- Razer: 94% (28 fps)
+- Logitech: 50% (15 fps) before fix
+
+**Solution**: Spread cameras across different USB controllers. Check with:
+```bash
+v4l2-ctl --list-devices  # Shows USB bus info
+lsusb -t                  # Shows full USB topology
+```
+
+### Jitter Characteristics at 720p (4 cameras parallel)
+
+| Camera | Stddev | Max | Jitter Events (>50ms) |
+|--------|--------|-----|----------------------|
+| eMeet C960 #1 | 1.9ms | 37ms | 0 |
+| eMeet C960 #2 | 2.1ms | 38ms | 0 |
+| Logitech C930e | 2.0ms | 38ms | 0 |
+| Razer Kiyo Pro | 11.9ms | 357ms | 8 (startup transient) |
+
+### Memory Stability
+
+All cameras showed stable memory during 1-minute continuous capture:
+- Growth: 14-35MB per camera (expected, frame buffers)
+- No unbounded growth
+- Memory released on container close
+
+### Recommendations
+
+1. **Use eMeet cameras** - cheapest and most reliable
+2. **Disable `exposure_dynamic_framerate`** on all cameras for consistent fps
+3. **720p is sufficient** for multi-meter capture distances
+4. **Spread cameras across USB controllers** for 1080p multi-camera
+5. **Expect ~2ms jitter** under normal conditions, plan for occasional spikes
+
+---
+
 ## Open Questions
 
 - ~~Hardware timestamps vs `perf_counter()` accuracy~~ (answered in Phase 3 - use PTS)
-- USB bandwidth limits for multi-camera 1080p30 (partially answered: jitter increases with load)
+- ~~USB bandwidth limits for multi-camera 1080p30~~ (answered in Phase 4 - controller sharing matters)
 - ~~MJPEG vs YUYV tradeoffs per camera~~ (answered in Phase 2)
-- ~~Frame timing jitter characteristics~~ (answered in Phase 2)
+- ~~Frame timing jitter characteristics~~ (answered in Phase 2/4)
