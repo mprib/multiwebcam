@@ -17,3 +17,6 @@ tests/tmp/
 
 # Working scripts folder
 scripts/
+
+# Spec documents (temporary planning docs)
+specs/
