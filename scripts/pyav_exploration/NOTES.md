@@ -177,6 +177,22 @@ Key findings:
 | MJPEG | Higher res at higher fps, less USB bandwidth | Compression artifacts, CPU decode (minimal) |
 | YUYV | No compression artifacts, lower latency | Limited to lower res/fps due to bandwidth |
 
+### Bandwidth Measurements (Logitech C930e)
+
+| Format | Resolution | Frame Size | Bandwidth | Decode Time |
+|--------|------------|------------|-----------|-------------|
+| MJPEG | 1920x1080 | 110 KB | 27 Mbps | 2.5ms |
+| MJPEG | 1280x720 | 60 KB | 15 Mbps | 0.5ms |
+| MJPEG | 640x480 | 24 KB | 6 Mbps | 0.2ms |
+| YUYV | 640x480 | 600 KB | 148 Mbps | 1.2ms |
+| YUYV | 1280x720 | 1800 KB | 442 Mbps | 2.3ms |
+
+**Key finding**: MJPEG 1080p uses 5.5x LESS bandwidth than YUYV 480p while delivering 6.8x more pixels.
+
+USB 2.0 isochronous limit: ~384 Mbps. YUYV 720p (442 Mbps) exceeds this - only works on USB 3.0.
+
+**Decision**: MJPEG is the default for all capture. No practical reason to use YUYV.
+
 ### Per-Camera Capability Comparison
 
 | Camera | Max MJPEG | Max YUYV @30fps | Notes |
