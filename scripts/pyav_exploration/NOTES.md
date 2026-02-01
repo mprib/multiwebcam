@@ -148,6 +148,133 @@ Device paths (`/dev/video0`, `/dev/video2`, etc.) are assigned at plug-in time a
 
 ---
 
+## Resource Cleanup (Phase 2)
+
+PyAV containers properly implement the context manager protocol. No file descriptor leaks observed.
+
+**Recommended pattern**:
+```python
+with av.open(device, format='v4l2') as container:
+    for frame in container.decode(video=0):
+        # process frame
+        ...
+```
+
+Key findings:
+- 10 rapid open/close cycles: no fd leaks
+- Context manager handles cleanup even when exceptions occur
+- No delay needed between close and reopen
+- Both explicit `close()` and context manager work, but context manager is safer
+
+---
+
+## Pixel Formats & Resolutions (Phase 2)
+
+### MJPEG vs YUYV Trade-offs
+
+| Format | Pros | Cons |
+|--------|------|------|
+| MJPEG | Higher res at higher fps, less USB bandwidth | Compression artifacts, CPU decode (minimal) |
+| YUYV | No compression artifacts, lower latency | Limited to lower res/fps due to bandwidth |
+
+### Per-Camera Capability Comparison
+
+| Camera | Max MJPEG | Max YUYV @30fps | Notes |
+|--------|-----------|-----------------|-------|
+| Laptop Webcam | 1920x1080@30 | 640x480 | Limited YUYV options |
+| Razer Kiyo Pro | 1920x1080@30 | 640x480 | Good across formats |
+| Logitech C930e | 1920x1080@30 | 848x480 | Many resolution options |
+| eMeet C960 | (not tested) | (not tested) | |
+
+### Resolution Setting Behavior
+
+Some cameras **silently fall back** to nearest supported resolution instead of erroring:
+```python
+# DANGEROUS: May get different resolution without error
+container = av.open(device, format='v4l2', options={'video_size': '4096x2160'})
+
+# SAFE: Verify what you actually got
+frame = next(container.decode(video=0))
+if (frame.width, frame.height) != (requested_width, requested_height):
+    raise ValueError(f"Resolution mismatch")
+```
+
+**Best practice**: Query supported resolutions first (via `v4l2-ctl --list-formats-ext`), only request known-good values.
+
+---
+
+## Framerate Behavior (Phase 2)
+
+### Expected vs Actual FPS
+
+USB cameras are **not real-time devices**. Expect:
+- 85-95% of requested framerate under normal conditions
+- Higher jitter at lower framerates (counter-intuitive)
+- Resolution affects achievable fps (more pixels = more bandwidth)
+
+### Jitter Characteristics
+
+Tested on Razer Kiyo Pro at 640x480:
+
+| Requested FPS | Actual FPS | Jitter (stddev) | Max Interval |
+|---------------|------------|-----------------|--------------|
+| 30 | 26.9 (90%) | 27.6ms | 356ms |
+| 15 | 13.6 (91%) | 60.4ms | 570ms |
+| 10 | 8.7 (87%) | 110.4ms | 836ms |
+
+**Key insight**: Jitter increases at lower framerates. USB delivery is bursty.
+
+### Implications for Multi-Camera Sync
+
+- Frames won't arrive at predictable intervals
+- Use wall-clock timestamps, not frame indices
+- Expect 10-50ms alignment error between cameras
+- High-res + multiple cameras = more bandwidth contention = more jitter
+
+---
+
+## Camera Controls (Phase 2)
+
+### Control Categories
+
+| Category | Common Controls |
+|----------|-----------------|
+| Exposure | `auto_exposure`, `exposure_time_absolute`, `gain` |
+| White Balance | `white_balance_automatic`, `white_balance_temperature` |
+| Focus | `focus_automatic_continuous`, `focus_absolute` |
+| Image | `brightness`, `contrast`, `saturation`, `sharpness` |
+
+### Auto vs Manual Mode Dependencies
+
+Controls have dependencies - must disable auto before manual adjustment:
+
+```bash
+# Switch to manual exposure first
+v4l2-ctl -d /dev/video0 --set-ctrl auto_exposure=1
+# Now exposure_time_absolute will work
+v4l2-ctl -d /dev/video0 --set-ctrl exposure_time_absolute=500
+```
+
+### Per-Camera Control Comparison
+
+| Control | Laptop Webcam | Razer Kiyo Pro | Logitech C930e |
+|---------|---------------|----------------|----------------|
+| Focus | No | Yes (0-600) | Yes |
+| Gain | No | Yes (0-255) | Yes |
+| Zoom | No | Yes (100-400) | Yes |
+| Pan/Tilt | No | Yes | Yes |
+
+Cheap webcams have fewer controls. The laptop webcam has no focus control (fixed focus lens).
+
+### Setting Controls Workflow
+
+1. Configure controls with v4l2-ctl **before** opening PyAV stream
+2. Open stream with PyAV
+3. Controls persist while device is open
+4. Some controls (like resolution-related) require stream restart
+
+---
+
 ## Future Optimizations
 
 - **Preview decimation**: Convert to BGR only every Nth frame for display (6Hz preview sufficient for framing). Record at full rate in native format.
@@ -157,6 +284,6 @@ Device paths (`/dev/video0`, `/dev/video2`, etc.) are assigned at plug-in time a
 ## Open Questions
 
 - Hardware timestamps vs `perf_counter()` accuracy
-- USB bandwidth limits for multi-camera 1080p30
-- MJPEG vs YUYV tradeoffs per camera
-- Frame timing jitter characteristics
+- USB bandwidth limits for multi-camera 1080p30 (partially answered: jitter increases with load)
+- ~~MJPEG vs YUYV tradeoffs per camera~~ (answered in Phase 2)
+- ~~Frame timing jitter characteristics~~ (answered in Phase 2)
