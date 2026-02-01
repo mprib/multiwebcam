@@ -193,6 +193,31 @@ USB 2.0 isochronous limit: ~384 Mbps. YUYV 720p (442 Mbps) exceeds this - only w
 
 **Decision**: MJPEG is the default for all capture. No practical reason to use YUYV.
 
+### MJPEG Color Conversion Fix
+
+**Problem**: PyAV's `frame.to_ndarray(format='bgr24')` produces garbage for MJPEG frames (yuvj422p format). Symptoms: purple tint, yellow blocks, scrambled tiles.
+
+**Root cause**: PyAV's yuvj422p → bgr24 conversion is broken. The `yuvj422p` format (full-range JPEG YUV 4:2:2) isn't properly handled.
+
+**Solution**: Reformat to rgb24 first, then use OpenCV to convert:
+
+```python
+def frame_to_bgr(frame) -> np.ndarray:
+    if frame.format.name in ("yuvj422p", "yuvj420p"):
+        # MJPEG - reformat to rgb24 (bgr24 is broken)
+        rgb_frame = frame.reformat(format="rgb24")
+        return cv2.cvtColor(rgb_frame.to_ndarray(), cv2.COLOR_RGB2BGR)
+    else:
+        # YUYV - direct conversion works
+        return frame.to_ndarray(format="bgr24")
+```
+
+**What doesn't work**:
+- `frame.to_ndarray(format='bgr24')` - garbage output
+- `frame.reformat(format='bgr24').to_ndarray()` - scrambled tiles
+- Raw packet → `cv2.imdecode()` - corrupt JPEG errors
+- Raw packet → PIL decode - works but slower
+
 ### Per-Camera Capability Comparison
 
 | Camera | Max MJPEG | Max YUYV @30fps | Notes |

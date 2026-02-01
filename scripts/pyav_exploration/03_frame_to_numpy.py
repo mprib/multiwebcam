@@ -15,7 +15,25 @@ import sys
 from time import perf_counter
 
 import av
+import cv2
 import numpy as np
+
+
+def frame_to_bgr(frame) -> np.ndarray:
+    """
+    Convert PyAV frame to BGR numpy array.
+
+    For MJPEG (yuvj422p): reformat to rgb24, then cvtColor to BGR.
+    For YUYV: direct to_ndarray works.
+    """
+    if frame.format.name in ("yuvj422p", "yuvj420p"):
+        # MJPEG path - reformat to rgb24 first (bgr24 is broken)
+        rgb_frame = frame.reformat(format="rgb24")
+        img_rgb = rgb_frame.to_ndarray()
+        return cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+    else:
+        # Raw formats (YUYV, etc) - direct conversion works
+        return frame.to_ndarray(format="bgr24")
 
 
 def benchmark_format(
@@ -36,14 +54,13 @@ def benchmark_format(
 
     try:
         container = av.open(device, format="v4l2", options=options)
-    except av.error.FFmpegError as e:
+    except av.error.FFmpegError:
         return None
-
-    stream = container.streams.video[0]
 
     # Collect data
     bgr_times = []
     frame_sizes = []
+    arr = None
 
     for i, packet in enumerate(container.demux(video=0)):
         if packet.size > 0:
@@ -52,7 +69,7 @@ def benchmark_format(
         # Decode and convert
         for frame in packet.decode():
             t0 = perf_counter()
-            arr = frame.to_ndarray(format="bgr24")
+            arr = frame_to_bgr(frame)
             bgr_times.append(perf_counter() - t0)
 
             if len(bgr_times) >= num_frames:
@@ -63,7 +80,7 @@ def benchmark_format(
 
     container.close()
 
-    if not bgr_times:
+    if not bgr_times or arr is None:
         return None
 
     return {
