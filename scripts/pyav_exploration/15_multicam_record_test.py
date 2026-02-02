@@ -29,7 +29,7 @@ import cv2
 import numpy as np
 import pandas as pd
 
-from multiwebcam.sources import DeviceSource, CaptureConfig, FramePacket
+from multiwebcam.sources import FrameSource, FrameSourceConfig, FramePacket
 
 
 @dataclass
@@ -80,14 +80,14 @@ def capture_and_encode_worker(
     device_id = int(device_path.replace("/dev/video", ""))
     output_video = output_dir / f"cam{device_id}.mp4"
 
-    config = CaptureConfig(
+    config = FrameSourceConfig(
         resolution=(1280, 720),
         fps=30,
         pixel_format="mjpeg",
         warmup_frames=5,
     )
 
-    source = DeviceSource(device_path, config=config)
+    source = FrameSource(device_path, config=config)
 
     # Open encoder
     output_container = av.open(str(output_video), mode="w")

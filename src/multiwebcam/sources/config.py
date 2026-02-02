@@ -1,4 +1,4 @@
-"""Capture configuration and status types."""
+"""FrameSource configuration and status types."""
 
 from __future__ import annotations
 
@@ -7,12 +7,12 @@ from typing import Literal
 
 
 @dataclass(frozen=True, slots=True)
-class CaptureConfig:
+class FrameSourceConfig:
     """
-    Configuration for video capture from a V4L2 device.
+    Configuration for a FrameSource.
 
     All fields have sensible defaults. Construct with overrides as needed:
-        config = CaptureConfig(resolution=(1920, 1080), fps=30)
+        config = FrameSourceConfig(resolution=(1920, 1080), fps=30)
 
     The v4l2_options dict passes through to FFmpeg's v4l2 input.
     Common use: {"exposure_dynamic_framerate": "0"} to disable auto-fps.
@@ -26,9 +26,9 @@ class CaptureConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class SourceStatus:
+class FrameSourceStatus:
     """
-    Status information returned when a DeviceSource starts successfully.
+    Status information returned when a FrameSource starts successfully.
 
     This captures what the device actually negotiated, which may differ
     from what was requested (some cameras silently fall back to nearest

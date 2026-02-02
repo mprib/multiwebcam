@@ -1,12 +1,9 @@
 """Immutable frame packet for pipeline transport."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
-if TYPE_CHECKING:
-    import numpy as np
+import numpy as np
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,5 +29,5 @@ class FramePacket:
     frame_index: int
     frame_time: float
     timestamp_source: Literal["pts", "wall_clock"]
-    frame: "np.ndarray"
+    frame: np.ndarray
     fps: float

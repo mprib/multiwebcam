@@ -5,48 +5,45 @@ from __future__ import annotations
 import re
 from collections import deque
 from time import perf_counter
-from typing import TYPE_CHECKING, Iterator, Literal
+from typing import Iterator, Literal
 
 import av
 from av.error import FFmpegError
 
-from .config import CaptureConfig, SourceStatus
+from .config import FrameSourceConfig, FrameSourceStatus
 from .conversion import frame_to_bgr
 from .frame_packet import FramePacket
 
-if TYPE_CHECKING:
-    pass
 
-
-class DeviceSourceError(Exception):
-    """Raised when device capture fails."""
+class FrameSourceError(Exception):
+    """Raised when frame capture fails."""
 
     pass
 
 
-class DeviceSource:
+class FrameSource:
     """
     Video capture from a V4L2 device using PyAV/FFmpeg.
 
     This is a passive iterator - it yields FramePackets on demand.
-    For threaded capture, wrap with FrameProducer from the pipeline layer.
+    For threaded capture, wrap with a producer from the pipeline layer.
 
     Usage patterns:
 
         # Context manager (recommended)
-        with DeviceSource("/dev/video0") as source:
+        with FrameSource("/dev/video0") as source:
             for packet in source:
                 process(packet.frame)
 
         # Explicit lifecycle
-        source = DeviceSource("/dev/video0")
+        source = FrameSource("/dev/video0")
         status = source.start()
         for packet in source:
             process(packet.frame)
         source.stop()
 
         # Auto-start on iteration
-        source = DeviceSource("/dev/video0")
+        source = FrameSource("/dev/video0")
         for packet in source:  # Calls start() implicitly
             process(packet.frame)
     """
@@ -56,21 +53,21 @@ class DeviceSource:
 
     def __init__(
         self,
-        device: str,
-        config: CaptureConfig | None = None,
+        device_path: str,
+        config: FrameSourceConfig | None = None,
     ) -> None:
         """
-        Initialize a DeviceSource.
+        Initialize a FrameSource.
 
         Args:
-            device: V4L2 device path (e.g., "/dev/video0")
+            device_path: V4L2 device path (e.g., "/dev/video0")
             config: Capture configuration. Defaults to 720p30 MJPEG.
 
         The device is not opened until start() is called.
         """
-        self._device_path = device
-        self._device_id = self._extract_device_id(device)
-        self._config = config or CaptureConfig()
+        self.device_path = device_path
+        self.device_id = self._extract_device_id(device_path)
+        self._config = config or FrameSourceConfig()
 
         # Runtime state (set by start())
         self._container: av.InputContainer | None = None
@@ -93,29 +90,19 @@ class DeviceSource:
         raise ValueError(f"Cannot extract device ID from path: {device_path}")
 
     @property
-    def device_path(self) -> str:
-        """Full V4L2 device path."""
-        return self._device_path
-
-    @property
-    def device_id(self) -> int:
-        """Numeric device ID extracted from path."""
-        return self._device_id
-
-    @property
     def is_running(self) -> bool:
         """True if the device is open and capturing."""
         return self._is_running
 
-    def start(self) -> SourceStatus:
+    def start(self) -> FrameSourceStatus:
         """
         Open the device and begin capture.
 
         Returns:
-            SourceStatus with actual device parameters.
+            FrameSourceStatus with actual device parameters.
 
         Raises:
-            DeviceSourceError: If device cannot be opened or configuration fails.
+            FrameSourceError: If device cannot be opened or configuration fails.
         """
         if self._is_running:
             return self._build_status()
@@ -126,10 +113,10 @@ class DeviceSource:
             self._consume_warmup_frames()
         except FFmpegError as e:
             self._cleanup()
-            raise DeviceSourceError(f"Failed to open {self._device_path}: {e}") from e
+            raise FrameSourceError(f"Failed to open {self.device_path}: {e}") from e
         except Exception as e:
             self._cleanup()
-            raise DeviceSourceError(f"Capture setup failed: {e}") from e
+            raise FrameSourceError(f"Capture setup failed: {e}") from e
 
         self._is_running = True
         return self._build_status()
@@ -151,7 +138,7 @@ class DeviceSource:
         options.update(self._config.v4l2_options)
 
         self._container = av.open(
-            self._device_path,
+            self.device_path,
             format="v4l2",
             options=options,
         )
@@ -165,7 +152,7 @@ class DeviceSource:
         We verify we got what we asked for.
         """
         if self._stream is None:
-            raise DeviceSourceError("No video stream available")
+            raise FrameSourceError("No video stream available")
 
         # Verify resolution (can't check until we decode a frame, defer to warmup)
 
@@ -177,7 +164,7 @@ class DeviceSource:
         We also use the first valid frame to determine timestamp source.
         """
         if self._container is None:
-            raise DeviceSourceError("Device not open")
+            raise FrameSourceError("Device not open")
 
         warmup_count = self._config.warmup_frames
         self._warmup_discarded = 0
@@ -198,7 +185,7 @@ class DeviceSource:
         actual = (frame.width, frame.height)
 
         if actual != expected:
-            raise DeviceSourceError(
+            raise FrameSourceError(
                 f"Resolution mismatch: requested {expected}, got {actual}. "
                 f"Camera may not support {expected[0]}x{expected[1]}."
             )
@@ -231,10 +218,10 @@ class DeviceSource:
             self._timestamp_source = "wall_clock"
             self._first_pts = None
 
-    def _build_status(self) -> SourceStatus:
-        """Build SourceStatus from current state."""
-        return SourceStatus(
-            device_path=self._device_path,
+    def _build_status(self) -> FrameSourceStatus:
+        """Build FrameSourceStatus from current state."""
+        return FrameSourceStatus(
+            device_path=self.device_path,
             resolution=self._config.resolution,
             actual_fps=self._calculate_fps(),
             first_pts_seconds=self._first_pts,
@@ -282,7 +269,7 @@ class DeviceSource:
             self.start()
 
         if self._container is None:
-            raise DeviceSourceError("Device not open after start()")
+            raise FrameSourceError("Device not open after start()")
 
         for frame in self._container.decode(video=0):
             frame_time = self._get_frame_time(frame)
@@ -291,8 +278,8 @@ class DeviceSource:
             bgr = frame_to_bgr(frame)
 
             packet = FramePacket(
-                device_path=self._device_path,
-                device_id=self._device_id,
+                device_path=self.device_path,
+                device_id=self.device_id,
                 frame_index=self._frame_index,
                 frame_time=frame_time,
                 timestamp_source=self._timestamp_source,
@@ -303,7 +290,7 @@ class DeviceSource:
             self._frame_index += 1
             yield packet
 
-    def __enter__(self) -> "DeviceSource":
+    def __enter__(self) -> "FrameSource":
         """Context manager entry - starts capture."""
         self.start()
         return self

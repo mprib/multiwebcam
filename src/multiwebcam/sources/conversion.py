@@ -1,17 +1,11 @@
 """Frame conversion utilities for PyAV."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
+import av
 import cv2
-
-if TYPE_CHECKING:
-    import av
-    import numpy as np
+import numpy as np
 
 
-def frame_to_bgr(frame: "av.VideoFrame") -> "np.ndarray":
+def frame_to_bgr(frame: av.VideoFrame) -> np.ndarray:
     """
     Convert a PyAV VideoFrame to BGR numpy array.
 
