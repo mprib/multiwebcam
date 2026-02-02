@@ -12,7 +12,7 @@ Example:
 
     # Discover available cameras
     for options in discover_frame_sources():
-        print(f"{options.path}: {options.name}")
+        print(f"{options.path}: {options.model}")
 
     # Get suggested config and start capture
     options = discover_frame_sources()[0]

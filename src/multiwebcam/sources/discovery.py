@@ -52,7 +52,7 @@ class FrameSourceOptions:
     """
 
     path: str  # e.g., "/dev/video0"
-    name: str  # e.g., "HD Pro Webcam C920"
+    model: str  # e.g., "HD Pro Webcam C920" (hardware name from V4L2)
     driver: str  # e.g., "uvcvideo"
     bus_info: str  # e.g., "usb-0000:00:14.0-2"
     modes: tuple[VideoMode, ...]
@@ -175,7 +175,7 @@ def get_frame_source_options(device_path: str) -> FrameSourceOptions | None:
     if info is None:
         return None
 
-    name, driver, bus_info, is_capture = info
+    model, driver, bus_info, is_capture = info
     if not is_capture:
         return None
 
@@ -186,7 +186,7 @@ def get_frame_source_options(device_path: str) -> FrameSourceOptions | None:
 
     return FrameSourceOptions(
         path=device_path,
-        name=name,
+        model=model,
         driver=driver,
         bus_info=bus_info,
         modes=tuple(modes),
