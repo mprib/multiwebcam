@@ -8,7 +8,9 @@ from time import perf_counter
 from typing import Iterator, Literal
 
 import av
+from av.container.input import InputContainer
 from av.error import FFmpegError
+from av.video.stream import VideoStream
 
 from .config import FrameSourceConfig, FrameSourceStatus
 from .conversion import frame_to_bgr
@@ -70,8 +72,8 @@ class FrameSource:
         self._config = config or FrameSourceConfig()
 
         # Runtime state (set by start())
-        self._container: av.InputContainer | None = None
-        self._stream: av.video.VideoStream | None = None
+        self._container: InputContainer | None = None
+        self._stream: VideoStream | None = None
         self._is_running = False
         self._timestamp_source: Literal["pts", "wall_clock"] = "pts"
         self._first_pts: float | None = None
@@ -142,6 +144,7 @@ class FrameSource:
             format="v4l2",
             options=options,
         )
+        assert self._container is not None  # av.open always returns a container
         self._stream = self._container.streams.video[0]
 
     def _validate_and_configure(self) -> None:
@@ -201,7 +204,7 @@ class FrameSource:
         If PTS is unavailable or appears stream-relative (< 60s), we fall
         back to wall-clock.
         """
-        if frame.pts is None or self._stream is None:
+        if frame.pts is None or self._stream is None or self._stream.time_base is None:
             self._timestamp_source = "wall_clock"
             self._first_pts = None
             return
@@ -252,7 +255,7 @@ class FrameSource:
     def _get_frame_time(self, frame: av.VideoFrame) -> float:
         """Get timestamp for frame based on configured source."""
         if self._timestamp_source == "pts" and frame.pts is not None:
-            if self._stream is None:
+            if self._stream is None or self._stream.time_base is None:
                 return perf_counter()
             time_base = self._stream.time_base
             return float(frame.pts * time_base)
