@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections import deque
 from time import perf_counter
@@ -12,9 +13,11 @@ from av.container.input import InputContainer
 from av.error import FFmpegError
 from av.video.stream import VideoStream
 
-from .config import FrameSourceConfig, FrameSourceStatus
-from .conversion import frame_to_bgr
-from .frame_packet import FramePacket
+from multiwebcam.sources.config import FrameSourceConfig, FrameSourceStatus
+from multiwebcam.sources.conversion import frame_to_bgr
+from multiwebcam.sources.frame_packet import FramePacket
+
+logger = logging.getLogger(__name__)
 
 
 class FrameSourceError(Exception):
@@ -107,7 +110,10 @@ class FrameSource:
             FrameSourceError: If device cannot be opened or configuration fails.
         """
         if self._is_running:
+            logger.warning(f"{self.device_path} already running")
             return self._build_status()
+
+        logger.info(f"Opening {self.device_path} ({self._config.resolution[0]}x{self._config.resolution[1]}@{self._config.fps}fps, {self._config.pixel_format})")
 
         try:
             self._open_device()
@@ -115,16 +121,22 @@ class FrameSource:
             self._consume_warmup_frames()
         except FFmpegError as e:
             self._cleanup()
+            logger.error(f"Failed to open {self.device_path}: {e}", exc_info=True)
             raise FrameSourceError(f"Failed to open {self.device_path}: {e}") from e
         except Exception as e:
             self._cleanup()
+            logger.error(f"Capture setup failed for {self.device_path}: {e}", exc_info=True)
             raise FrameSourceError(f"Capture setup failed: {e}") from e
 
         self._is_running = True
-        return self._build_status()
+        status = self._build_status()
+        logger.info(f"Started {self.device_path}: timestamp_source={status.timestamp_source}, warmup_frames={status.warmup_frames_discarded}")
+        return status
 
     def stop(self) -> None:
         """Stop capture and release the device."""
+        if self._is_running:
+            logger.info(f"Stopping {self.device_path}")
         self._cleanup()
         self._is_running = False
 
@@ -188,6 +200,10 @@ class FrameSource:
         actual = (frame.width, frame.height)
 
         if actual != expected:
+            logger.error(
+                f"{self.device_path}: resolution mismatch (requested {expected}, got {actual})",
+                exc_info=True
+            )
             raise FrameSourceError(
                 f"Resolution mismatch: requested {expected}, got {actual}. "
                 f"Camera may not support {expected[0]}x{expected[1]}."
@@ -207,6 +223,7 @@ class FrameSource:
         if frame.pts is None or self._stream is None or self._stream.time_base is None:
             self._timestamp_source = "wall_clock"
             self._first_pts = None
+            logger.warning(f"{self.device_path}: PTS unavailable, using wall-clock timestamps")
             return
 
         time_base = self._stream.time_base
@@ -217,9 +234,11 @@ class FrameSource:
         if pts_seconds > 60:
             self._timestamp_source = "pts"
             self._first_pts = pts_seconds
+            logger.debug(f"{self.device_path}: Using PTS timestamps (first_pts={pts_seconds:.3f}s)")
         else:
             self._timestamp_source = "wall_clock"
             self._first_pts = None
+            logger.warning(f"{self.device_path}: PTS appears stream-relative ({pts_seconds:.3f}s < 60s), using wall-clock")
 
     def _build_status(self) -> FrameSourceStatus:
         """Build FrameSourceStatus from current state."""

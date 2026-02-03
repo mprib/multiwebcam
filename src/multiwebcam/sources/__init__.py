@@ -25,16 +25,16 @@ Example:
                 break
 """
 
-from .config import FrameSourceConfig, FrameSourceStatus
-from .conversion import frame_to_bgr
-from .device import FrameSource, FrameSourceError
-from .discovery import (
+from multiwebcam.sources.config import FrameSourceConfig, FrameSourceStatus
+from multiwebcam.sources.conversion import frame_to_bgr
+from multiwebcam.sources.device import FrameSource, FrameSourceError
+from multiwebcam.sources.discovery import (
     FrameSourceOptions,
     VideoMode,
     discover_frame_sources,
     get_frame_source_options,
 )
-from .frame_packet import FramePacket
+from multiwebcam.sources.frame_packet import FramePacket
 
 __all__ = [
     "FramePacket",

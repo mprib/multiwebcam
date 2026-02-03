@@ -7,9 +7,11 @@ from queue import Queue
 from threading import Event, Thread
 from typing import TYPE_CHECKING
 
+from multiwebcam.pipeline.signals import StopSignal
+
 if TYPE_CHECKING:
-    from ..sources.device import FrameSource
-    from ..sources.frame_packet import FramePacket
+    from multiwebcam.sources.device import FrameSource
+    from multiwebcam.sources.frame_packet import FramePacket
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,7 @@ class FrameProducer:
 
     Usage:
         source = FrameSource("/dev/video0")
-        queue: Queue[FramePacket] = Queue(maxsize=30)
+        queue: Queue[FramePacket | StopSignal] = Queue(maxsize=30)
         producer = FrameProducer(source, queue)
 
         producer.start()
@@ -32,13 +34,15 @@ class FrameProducer:
         producer.stop()
     """
 
-    def __init__(self, source: FrameSource, output_queue: Queue[FramePacket]) -> None:
+    def __init__(
+        self, source: FrameSource, output_queue: Queue[FramePacket | StopSignal]
+    ) -> None:
         """
         Initialize a FrameProducer.
 
         Args:
             source: FrameSource to capture from
-            output_queue: Queue to push FramePackets to
+            output_queue: Queue to push FramePackets (or StopSignal on shutdown)
         """
         self.source = source
         self.output_queue = output_queue

@@ -6,11 +6,13 @@ import logging
 from queue import Queue
 from typing import Iterator
 
-from .aligner import FrameAligner
-from .cluster import FrameCluster
-from .producer import FrameProducer
-from ..sources.device import FrameSource
-from ..sources.frame_packet import FramePacket
+from multiwebcam.pipeline.aligner import FrameAligner
+from multiwebcam.pipeline.cluster import FrameCluster
+from multiwebcam.pipeline.producer import FrameProducer
+from multiwebcam.pipeline.report import AlignmentReport
+from multiwebcam.pipeline.signals import StopSignal
+from multiwebcam.sources.device import FrameSource
+from multiwebcam.sources.frame_packet import FramePacket
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,8 @@ class CaptureSession:
         self,
         sources: list[FrameSource],
         queue_size: int = 30,
-        alignment_tolerance_ms: float = 50.0,
+        enable_reports: bool = False,
+        report_interval_seconds: float = 2.0,
     ) -> None:
         """
         Initialize a CaptureSession.
@@ -53,22 +56,26 @@ class CaptureSession:
         Args:
             sources: List of FrameSource instances to capture from
             queue_size: Maximum frames to buffer per camera
-            alignment_tolerance_ms: Maximum time difference for aligned frames
+            enable_reports: If True, emit AlignmentReports for monitoring
+            report_interval_seconds: How often to emit reports (if enabled)
         """
         if not sources:
             raise CaptureSessionError("At least one FrameSource required")
 
         self.sources = sources
         self.queue_size = queue_size
-        self.alignment_tolerance_ms = alignment_tolerance_ms
+        self.report_interval_seconds = report_interval_seconds
 
         # Per-camera queues
-        self._producer_queues: dict[str, Queue[FramePacket]] = {}
+        self._producer_queues: dict[str, Queue[FramePacket | StopSignal]] = {}
         self._producers: list[FrameProducer] = []
 
         # Aligner output queue
-        self._cluster_queue: Queue[FrameCluster] = Queue(maxsize=queue_size)
+        self._cluster_queue: Queue[FrameCluster | None] = Queue(maxsize=queue_size)
         self._aligner: FrameAligner | None = None
+
+        # Report queue (optional)
+        self._report_queue: Queue[AlignmentReport] | None = Queue() if enable_reports else None
 
         self._running = False
 
@@ -86,7 +93,7 @@ class CaptureSession:
 
         # Create per-camera queues and producers
         for source in self.sources:
-            queue: Queue[FramePacket] = Queue(maxsize=self.queue_size)
+            queue: Queue[FramePacket | StopSignal] = Queue(maxsize=self.queue_size)
             self._producer_queues[source.device_path] = queue
 
             producer = FrameProducer(source, queue)
@@ -97,12 +104,13 @@ class CaptureSession:
             producer.start()
 
         # Create and start aligner (consumes from queues)
-        # Aligner has timeout to wait for first frames
+        # Uses nearest-neighbor algorithm, not fixed tolerance
         self._aligner = FrameAligner(
             input_queues=self._producer_queues,
             output_queue=self._cluster_queue,
-            tolerance_ms=self.alignment_tolerance_ms,
-            timeout_seconds=5.0,  # Allow time for cameras to warm up
+            queue_timeout_seconds=5.0,  # Allow time for cameras to warm up
+            report_queue=self._report_queue,
+            report_interval_seconds=self.report_interval_seconds,
         )
         self._aligner.start()
 
@@ -140,11 +148,32 @@ class CaptureSession:
         while self._running:
             try:
                 cluster = self._cluster_queue.get(timeout=1.0)
+                if cluster is None:
+                    # End sentinel from aligner
+                    break
                 yield cluster
             except Exception:
                 # Queue timeout - check if we should continue
                 if not self._running:
                     break
+
+    def get_latest_report(self) -> AlignmentReport | None:
+        """
+        Get the latest alignment report (non-blocking).
+
+        Returns the most recent report, discarding any older ones in the queue.
+        Returns None if no reports are available or reporting is disabled.
+        """
+        if self._report_queue is None:
+            return None
+
+        latest: AlignmentReport | None = None
+        while True:
+            try:
+                latest = self._report_queue.get_nowait()
+            except Exception:
+                break
+        return latest
 
     def _start_all_sources_parallel(self) -> None:
         """
@@ -186,17 +215,14 @@ class CaptureSession:
                 if source.is_running:
                     source.stop()
             error_msgs = [f"{path}: {e}" for path, e in errors]
-            raise CaptureSessionError(
-                f"Failed to start cameras:\n" + "\n".join(error_msgs)
-            )
+            raise CaptureSessionError(f"Failed to start cameras:\n" + "\n".join(error_msgs))
 
         # Validate PTS compatibility
         pts_cameras = [(path, pts) for path, pts in pts_values if pts is not None]
 
         if not pts_cameras:
             logger.warning(
-                "All cameras using wall-clock timestamps (PTS unavailable). "
-                "Temporal alignment may be less accurate."
+                "All cameras using wall-clock timestamps (PTS unavailable). Temporal alignment may be less accurate."
             )
             return
 
@@ -220,8 +246,7 @@ class CaptureSession:
             )
 
         logger.info(
-            f"PTS validation passed: {len(pts_cameras)} camera(s) "
-            f"using compatible timestamps (spread: {spread:.3f}s)"
+            f"PTS validation passed: {len(pts_cameras)} camera(s) using compatible timestamps (spread: {spread:.3f}s)"
         )
 
     def __enter__(self) -> CaptureSession:

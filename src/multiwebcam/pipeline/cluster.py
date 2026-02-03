@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..sources.frame_packet import FramePacket
+from multiwebcam.sources.frame_packet import FramePacket
 
 
 @dataclass(frozen=True, slots=True)

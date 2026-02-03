@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import FrameSourceConfig
+from multiwebcam.sources.config import FrameSourceConfig
+
+logger = logging.getLogger(__name__)
 
 # V4L2 fourcc codes to FFmpeg format names
 _V4L2_TO_FFMPEG: dict[str, str] = {
@@ -114,11 +117,7 @@ class FrameSourceOptions:
     def resolutions(self, pixel_format: str) -> set[tuple[int, int]]:
         """Resolutions available for a pixel format."""
         fmt = _normalize_format(pixel_format)
-        return {
-            (mode.width, mode.height)
-            for mode in self.modes
-            if _normalize_format(mode.pixel_format) == fmt
-        }
+        return {(mode.width, mode.height) for mode in self.modes if _normalize_format(mode.pixel_format) == fmt}
 
     def framerates(self, pixel_format: str, width: int, height: int) -> list[float]:
         """Framerates available for a format + resolution."""
@@ -126,9 +125,7 @@ class FrameSourceOptions:
         return sorted(
             mode.fps
             for mode in self.modes
-            if _normalize_format(mode.pixel_format) == fmt
-            and mode.width == width
-            and mode.height == height
+            if _normalize_format(mode.pixel_format) == fmt and mode.width == width and mode.height == height
         )
 
     @property
@@ -154,11 +151,14 @@ def discover_frame_sources() -> list[FrameSourceOptions]:
     Raises:
         FileNotFoundError: If v4l2-ctl is not installed.
     """
+    logger.info("Discovering V4L2 devices")
     devices = []
     for path in sorted(Path("/dev").glob("video*")):
         options = get_frame_source_options(str(path))
         if options is not None:
             devices.append(options)
+            logger.debug(f"Found capture device: {path} ({options.model})")
+    logger.info(f"Discovery complete: {len(devices)} capture device(s) found")
     return devices
 
 
@@ -173,15 +173,18 @@ def get_frame_source_options(device_path: str) -> FrameSourceOptions | None:
     """
     info = _query_device_info(device_path)
     if info is None:
+        logger.debug(f"{device_path}: Failed to query device info")
         return None
 
     model, driver, bus_info, is_capture = info
     if not is_capture:
+        logger.debug(f"{device_path}: Not a capture device")
         return None
 
     modes = _query_modes(device_path)
     if not modes:
         # No modes means it's likely a metadata node
+        logger.debug(f"{device_path}: No capture modes available (likely metadata node)")
         return None
 
     return FrameSourceOptions(
@@ -224,11 +227,11 @@ def _query_device_info(device_path: str) -> tuple[str, str, str, bool] | None:
         return (name, driver, bus_info, is_capture)
 
     except subprocess.TimeoutExpired:
+        logger.warning(f"{device_path}: v4l2-ctl query timed out")
         return None
     except FileNotFoundError as e:
-        raise FileNotFoundError(
-            "v4l2-ctl not found. Install v4l-utils: sudo apt install v4l-utils"
-        ) from e
+        logger.error("v4l2-ctl not found - install v4l-utils: sudo apt install v4l-utils")
+        raise FileNotFoundError("v4l2-ctl not found. Install v4l-utils: sudo apt install v4l-utils") from e
 
 
 def _query_modes(device_path: str) -> list[VideoMode]:
@@ -290,12 +293,14 @@ def _parse_formats_output(output: str) -> list[VideoMode]:
         match = interval_pattern.search(line)
         if match and current_format and current_width and current_height:
             fps = float(match.group(1))
-            modes.append(VideoMode(
-                pixel_format=current_format,
-                width=current_width,
-                height=current_height,
-                fps=fps,
-            ))
+            modes.append(
+                VideoMode(
+                    pixel_format=current_format,
+                    width=current_width,
+                    height=current_height,
+                    fps=fps,
+                )
+            )
             continue
 
         # Framerate (fraction form)
@@ -304,12 +309,14 @@ def _parse_formats_output(output: str) -> list[VideoMode]:
             num = int(match.group(1))
             denom = int(match.group(2))
             fps = denom / num if num else 0
-            modes.append(VideoMode(
-                pixel_format=current_format,
-                width=current_width,
-                height=current_height,
-                fps=fps,
-            ))
+            modes.append(
+                VideoMode(
+                    pixel_format=current_format,
+                    width=current_width,
+                    height=current_height,
+                    fps=fps,
+                )
+            )
             continue
 
     return modes

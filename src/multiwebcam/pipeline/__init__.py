@@ -23,13 +23,16 @@ Example:
                 print(f"{device_path}: frame {packet.frame_index}")
 """
 
-from .aligner import FrameAligner
-from .cluster import FrameCluster
-from .producer import FrameProducer
-from .session import CaptureSession, CaptureSessionError
-from .signals import ShutdownSignal, StartSignal, StopSignal
+from multiwebcam.pipeline.aligner import FrameAligner
+from multiwebcam.pipeline.cluster import FrameCluster
+from multiwebcam.pipeline.producer import FrameProducer
+from multiwebcam.pipeline.report import AlignmentReport, CameraStats
+from multiwebcam.pipeline.session import CaptureSession, CaptureSessionError
+from multiwebcam.pipeline.signals import ShutdownSignal, StartSignal, StopSignal
 
 __all__ = [
+    "AlignmentReport",
+    "CameraStats",
     "CaptureSession",
     "CaptureSessionError",
     "FrameAligner",
