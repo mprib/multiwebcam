@@ -104,7 +104,7 @@ class FrameSourceOptions:
         return FrameSourceConfig(
             resolution=(best.width, best.height),
             fps=int(best.fps),
-            pixel_format=best.pixel_format.lower(),
+            pixel_format=_normalize_format(best.pixel_format),
         )
 
     def formats(self) -> set[str]:
