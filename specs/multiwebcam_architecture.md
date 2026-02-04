@@ -26,8 +26,8 @@ The core innovation: each camera pushes frames to THREE separate queues with dif
 
 ```
 FrameSource --> FrameProducer --> Display Queue (maxsize=1, drop-oldest)
-                              --> Recording Queue (blocking, preserve ALL)
-                              --> Alignment Queue (blocking, for monitoring)
+                             --> Recording Queue (blocking, preserve ALL)
+                             --> Alignment Queue (blocking, for monitoring)
 ```
 
 **Why three queues?**
@@ -400,47 +400,291 @@ This is validation, not correction. If timestamps are incompatible, we log it an
 
 **Location**: `src/multiwebcam/recording/recorder.py` (to be created)
 
+**Responsibility**: Drains recording queues and writes MP4 + frametimes.csv for a single recording session.
+
 ```python
 class FrameRecorder:
-    """Drains recording queues and writes MP4 + frametimes.csv."""
+    """
+    Drains recording queues and writes MP4 + frametimes.csv.
+
+    Owns per-camera encoder threads. CaptureSession creates one FrameRecorder
+    per recording session (start_recording creates it, stop_recording destroys it).
+    """
 
     def __init__(
         self,
         recording_queues: dict[str, Queue[FramePacket]],
         output_dir: Path,
+        camera_labels: dict[str, str],  # device_path -> label for filenames
         codec: str = "h264",
+        resolution: tuple[int, int] | None = None,  # If None, use first frame's resolution
     ) -> None: ...
 
-    def start(self) -> None: ...
-    def stop(self) -> None: ...
+    def start(self) -> None:
+        """Start encoder threads. Call after is_recording flag is set."""
+        ...
+
+    def stop(self, drain_timeout: float = 10.0) -> RecordingResult:
+        """
+        Signal stop, drain remaining frames, finalize files.
+
+        Returns RecordingResult with per-camera frame counts and any errors.
+        """
+        ...
 
     @property
-    def frames_written(self) -> dict[str, int]: ...
+    def is_running(self) -> bool: ...
+
     @property
-    def duration_seconds(self) -> float: ...
+    def frames_written(self) -> dict[str, int]:
+        """Per-camera frame counts (device_path -> count)."""
+        ...
+
+    @property
+    def recording_duration(self) -> float:
+        """Seconds since start() was called."""
+        ...
 ```
 
-**Thread model**:
-- One thread per camera (drains recording queue, writes to MP4)
-- Main thread collects frame indices for frametimes.csv
-- On stop: finalize MP4s, write frametimes.csv
+**RecordingResult** (returned by stop()):
+
+```python
+@dataclass(frozen=True)
+class RecordingResult:
+    output_dir: Path
+    frames_per_camera: dict[str, int]   # device_path -> frame count
+    duration_seconds: float
+    errors: list[str]                   # Any non-fatal errors encountered
+    frametimes_path: Path               # Path to frametimes.csv
+```
+
+### Thread Model
+
+```
+                    CaptureSession
+                          |
+            +-------------+-------------+
+            |                           |
+    is_recording.set()           FrameRecorder
+                                       |
+              +------------------------+------------------------+
+              |                        |                        |
+    CameraEncoder(cam0)      CameraEncoder(cam2)      CameraEncoder(cam4)
+    - drains queue           - drains queue           - drains queue
+    - writes MP4             - writes MP4             - writes MP4
+    - reports timestamps     - reports timestamps     - reports timestamps
+              |                        |                        |
+              +------------------------+------------------------+
+                                       |
+                              FrametimesCollector
+                              (aggregates timestamps,
+                               writes CSV on stop)
+```
+
+**Key design decisions**:
+
+1. **One encoder thread per camera**: Each `CameraEncoder` drains its recording queue independently and writes to its own MP4 file. No cross-camera coordination during encoding.
+
+2. **Timestamps collected centrally**: Each encoder thread reports `(device_path, frame_index, frame_time)` to a thread-safe `FrametimesCollector`. The collector writes frametimes.csv when recording stops.
+
+3. **Sentinel-based shutdown**: When `stop()` is called:
+   - `is_recording` flag is cleared (producers stop pushing)
+   - A `None` sentinel is pushed to each recording queue
+   - Encoder threads drain until they see the sentinel, then exit
+   - Main thread joins all encoder threads
+   - frametimes.csv is written
+   - MP4 containers are finalized
+
+4. **FrameRecorder is ephemeral**: One instance per recording. CaptureSession creates it on `start_recording()`, destroys it on `stop_recording()`. This avoids state accumulation across recordings.
+
+### CameraEncoder (Internal)
+
+```python
+class CameraEncoder:
+    """
+    Per-camera worker thread that drains queue and writes MP4.
+
+    Internal to FrameRecorder - not part of public API.
+    """
+
+    def __init__(
+        self,
+        device_path: str,
+        queue: Queue[FramePacket | None],  # None = sentinel
+        output_path: Path,
+        codec: str,
+        timestamp_callback: Callable[[str, int, float], None],
+    ) -> None: ...
+
+    def run(self) -> None:
+        """
+        Main loop: drain queue, encode frames, report timestamps.
+
+        Exits when sentinel (None) is received.
+        """
+        ...
+```
 
 ### frametimes.csv Format
 
+**Revised format** - preserves per-camera frame indices for maximum flexibility in post-processing:
+
+```csv
+device_path,frame_index,frame_time,timestamp_source
+/dev/video0,0,1234.567,pts
+/dev/video2,0,1234.568,pts
+/dev/video4,0,1234.565,pts
+/dev/video0,1,1234.600,pts
+/dev/video2,1,1234.601,pts
+/dev/video4,1,1234.599,pts
+/dev/video0,2,1234.633,pts
+/dev/video2,2,1234.634,pts
+/dev/video4,2,1234.632,pts
+```
+
+**Why this format (not the previous row-per-cluster format)?**
+
+The previous spec showed:
 ```csv
 frame_index,camera_0_pts,camera_2_pts,camera_4_pts
 0,1234.567,1234.568,1234.565
-1,1234.600,1234.601,1234.599
-2,1234.633,1234.634,1234.632
-3,1234.667,-1,1234.665
 ```
 
-- One row per "aligned" frame index
-- Column per camera (device_id in header)
-- Value = PTS timestamp in seconds
-- `-1` = frame missing from that camera
+This has problems:
+1. **Assumes cameras have same frame count** - they may not (hardware drops, staggered start)
+2. **Loses information** - which frame index from camera_2 corresponds to row 5?
+3. **Alignment is a downstream concern** - Caliscope should decide how to cluster, not us
 
-**Note**: "aligned" here means the Nth frame from each camera, NOT temporally aligned. Temporal alignment happens in Caliscope using the PTS values.
+The long format (one row per frame) is:
+- Lossless - every frame's exact timestamp is preserved
+- Simple - no alignment logic needed during recording
+- Flexible - Caliscope can apply any clustering algorithm
+
+**Column definitions**:
+- `device_path`: Full V4L2 path (matches FramePacket.device_path)
+- `frame_index`: Per-camera sequential index (matches FramePacket.frame_index)
+- `frame_time`: PTS or wall-clock timestamp in seconds (matches FramePacket.frame_time)
+- `timestamp_source`: "pts" or "wall_clock" (matches FramePacket.timestamp_source)
+
+**File creation**: Written atomically at recording stop, not streamed during recording. This avoids partial writes if recording is interrupted.
+
+### Shutdown Sequence
+
+When `CaptureSession.stop_recording()` is called:
+
+```
+1. is_recording.clear()
+   - Producers immediately stop pushing to recording queues
+   - Display and alignment queues continue normally
+
+2. For each recording queue: queue.put(None)
+   - Sentinel signals "no more frames coming"
+
+3. FrameRecorder.stop(drain_timeout=10.0)
+   a. Each CameraEncoder drains queue until sentinel
+   b. Encoder threads join (with timeout)
+   c. MP4 containers finalized
+   d. FrametimesCollector writes CSV
+   e. Returns RecordingResult
+
+4. FrameRecorder instance is discarded
+   - CaptureSession sets self._frame_recorder = None
+```
+
+**Drain guarantee**: The sentinel ensures all queued frames are written. The `drain_timeout` is a safety valve - if an encoder thread hangs, we don't block forever. Frames that couldn't be written are logged as errors in RecordingResult.
+
+### Error Handling
+
+**Encoder errors** (codec failure, corrupt frame):
+- Log error with frame details
+- Skip frame, continue with next
+- Count skipped frames in RecordingResult.errors
+
+**Disk full**:
+- Encoder thread catches OSError
+- Stops writing, logs error
+- Recording continues for other cameras
+- Error reported in RecordingResult
+
+**Camera disconnect during recording**:
+- Producer thread exits (handled by existing error handling)
+- Recording queue receives no more frames
+- Encoder drains what it has, then waits for sentinel
+- Sentinel arrives during stop_recording()
+- Other cameras' recordings are unaffected
+
+**Thread timeout on stop**:
+- If encoder thread doesn't exit within `drain_timeout`
+- Log warning, force-terminate is NOT done (daemon threads exit with process)
+- Return partial RecordingResult with warning
+
+### Integration with CaptureSession
+
+```python
+# In CaptureSession
+
+def start_recording(self, output_dir: Path, camera_labels: dict[str, str] | None = None) -> None:
+    """
+    Begin recording all cameras to output_dir.
+
+    Args:
+        output_dir: Directory for MP4 files and frametimes.csv
+        camera_labels: Optional mapping of device_path -> label for filenames.
+                      If None, uses device_id (e.g., "camera_0.mp4")
+    """
+    if self._is_recording.is_set():
+        raise CaptureSessionError("Already recording")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build default labels if not provided
+    if camera_labels is None:
+        camera_labels = {
+            path: f"camera_{path.split('video')[-1]}"
+            for path in self._producer_queues.keys()
+        }
+
+    # Extract recording queues
+    recording_queues = {
+        path: queues.recording
+        for path, queues in self._producer_queues.items()
+    }
+
+    # Create recorder
+    self._frame_recorder = FrameRecorder(
+        recording_queues=recording_queues,
+        output_dir=output_dir,
+        camera_labels=camera_labels,
+    )
+
+    # Start recording (order matters: flag first, then recorder)
+    self._is_recording.set()
+    self._frame_recorder.start()
+
+
+def stop_recording(self) -> RecordingResult | None:
+    """
+    Stop recording and finalize files.
+
+    Returns RecordingResult with frame counts and any errors,
+    or None if not recording.
+    """
+    if not self._is_recording.is_set():
+        return None
+
+    # Clear flag first (producers stop pushing)
+    self._is_recording.clear()
+
+    # Send sentinels
+    for queues in self._producer_queues.values():
+        queues.recording.put(None)
+
+    # Stop recorder (drains queues, finalizes files)
+    result = self._frame_recorder.stop()
+    self._frame_recorder = None
+
+    return result
+```
 
 ### Project Folder Structure
 
@@ -763,8 +1007,9 @@ src/multiwebcam/
 src/multiwebcam/
 +-- recording/              # [NOT IMPLEMENTED]
 |   +-- __init__.py
-|   +-- recorder.py         # FrameRecorder
-|   +-- frametimes.py       # frametimes.csv writing
+|   +-- recorder.py         # FrameRecorder, RecordingResult
+|   +-- encoder.py          # CameraEncoder (internal)
+|   +-- frametimes.py       # FrametimesCollector, write_frametimes_csv()
 |
 +-- profiles/               # [NOT IMPLEMENTED]
 |   +-- __init__.py
@@ -806,19 +1051,33 @@ src/multiwebcam/
 **Goal**: Save frames to MP4 + frametimes.csv without frame loss.
 
 Tasks:
-1. `recording/recorder.py` - FrameRecorder class
-   - Per-camera worker threads drain recording queues
+1. `recording/frametimes.py` - FrametimesCollector
+   - Thread-safe collection of (device_path, frame_index, frame_time, timestamp_source)
+   - write_frametimes_csv() for atomic file writing
+2. `recording/encoder.py` - CameraEncoder
+   - Per-camera worker thread
    - PyAV MP4 encoding (h264)
-   - Track frame indices for frametimes.csv
-2. `recording/frametimes.py` - CSV writing
-   - One row per frame index
-   - PTS values per camera column
-3. Integration with CaptureSession
-   - `start_recording()` spawns FrameRecorder
-   - `stop_recording()` finalizes files
-4. Test script validating lossless capture
+   - Sentinel-based shutdown
+3. `recording/recorder.py` - FrameRecorder
+   - Orchestrates CameraEncoders
+   - Owns FrametimesCollector
+   - RecordingResult on stop
+4. Integration with CaptureSession
+   - `start_recording()` creates FrameRecorder
+   - `stop_recording()` drains, finalizes, returns result
+5. Test script validating:
+   - Frame count matches across files
+   - Timestamps in frametimes.csv match MP4 frame count
+   - No frame loss under normal operation
+   - Graceful handling of camera disconnect
 
 **Dependencies**: None (Phase 1 complete)
+
+**Open questions resolved**:
+- Thread model: One encoder thread per camera + central timestamp collector
+- Shutdown: Sentinel-based drain with timeout
+- frametimes format: Long format (one row per frame)
+- Error handling: Log and continue, report in RecordingResult
 
 ### Phase 3: Qt Display (NO RECORDING)
 
@@ -881,7 +1140,7 @@ Tasks:
 
 4. **Reconnection handling**: If a camera disconnects during recording, what happens to the other cameras? Current answer: they keep recording, disconnected camera's file is finalized.
 
-5. **Memory pressure**: Current design doesn't auto-regulate fps on memory pressure. Recording queues could grow unbounded if recorder can't keep up. May need monitoring + backpressure.
+5. ~~**Memory pressure**: Current design doesn't auto-regulate fps on memory pressure. Recording queues could grow unbounded if recorder can't keep up. May need monitoring + backpressure.~~ **Resolved**: FrameRecorder drains queues continuously. If encoder can't keep up with capture rate, queue grows; if it exceeds buffer size, producers block (bounded queue). This is acceptable for recording - slight latency increase won't affect recorded content.
 
 ---
 
