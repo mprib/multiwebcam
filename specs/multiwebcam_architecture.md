@@ -449,17 +449,16 @@ frame_index,camera_0_pts,camera_2_pts,camera_4_pts
 +-- multiwebcam.toml              # Camera profiles and settings
 +-- calibration/
 |   +-- intrinsic/
-|   |   +-- front_left.mp4        # Single-camera recordings (no frametimes)
+|   |   +-- front_left.mp4        # One per camera, overwrite on re-record
 |   |   +-- overhead.mp4
 |   |   +-- side.mp4
 |   +-- extrinsic/
-|       +-- <session_name>/       # Multi-camera calibration recordings
-|           +-- front_left.mp4
-|           +-- overhead.mp4
-|           +-- side.mp4
-|           +-- frametimes.csv
+|       +-- front_left.mp4        # ONE set per project, overwrite on re-record
+|       +-- overhead.mp4
+|       +-- side.mp4
+|       +-- frametimes.csv
 +-- recordings/
-    +-- <trial_name>/             # Multi-camera motion capture trials
+    +-- <trial_name>/             # Multiple trials, user names each one
         +-- front_left.mp4
         +-- overhead.mp4
         +-- side.mp4
@@ -467,10 +466,11 @@ frame_index,camera_0_pts,camera_2_pts,camera_4_pts
 ```
 
 **Key points:**
-- Filename = camera name (user-assigned label, not device path)
-- Intrinsic recordings: single MP4 per camera, NO frametimes.csv (single camera doesn't need alignment)
-- Extrinsic/recordings: one MP4 per camera + frametimes.csv for temporal alignment
-- Context (intrinsic vs extrinsic vs recording) determined by folder location
+- Filename = camera label (user-assigned, not device path)
+- Intrinsic: one MP4 per camera, no frametimes.csv, overwrite on re-record
+- Extrinsic: one set per project (no subfolders), overwrite on re-record
+- Recordings: multiple named trials, each in its own subfolder
+- frametimes.csv only for multi-camera recordings (extrinsic + trials)
 
 ---
 
