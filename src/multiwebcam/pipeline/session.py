@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import logging
-from queue import Queue
-from typing import Iterator
+import time
+from pathlib import Path
+from queue import Empty, Queue
+from threading import Event
 
-from multiwebcam.pipeline.aligner import FrameAligner
-from multiwebcam.pipeline.cluster import FrameCluster
-from multiwebcam.pipeline.producer import FrameProducer
-from multiwebcam.pipeline.report import AlignmentReport
-from multiwebcam.pipeline.signals import StopSignal
+from multiwebcam.pipeline.alignment import AlignmentMonitor, AlignmentStats
+from multiwebcam.pipeline.producer import FrameProducer, ProducerQueues
+from multiwebcam.pipeline.report import CameraStats
 from multiwebcam.sources.device import FrameSource
 from multiwebcam.sources.frame_packet import FramePacket
 
@@ -25,10 +25,10 @@ class CaptureSessionError(Exception):
 
 class CaptureSession:
     """
-    Orchestrates multi-camera capture with temporal alignment.
+    Orchestrates multi-camera capture with per-camera frame access.
 
-    Creates producer threads for each camera, an aligner thread to group
-    frames, and provides an iterator over aligned FrameClusters.
+    Creates producer threads for each camera and provides access to latest
+    frames and per-camera statistics.
 
     Usage:
         sources = [
@@ -37,50 +37,64 @@ class CaptureSession:
         ]
 
         with CaptureSession(sources) as session:
-            for cluster in session.clusters():
-                # Process aligned frames
-                for device_path, packet in cluster.frames.items():
-                    cv2.imshow(device_path, packet.frame)
+            while True:
+                # Get latest frames for display
+                frames = session.get_latest_frames()
+                for device_path, packet in frames.items():
+                    if packet is not None:
+                        cv2.imshow(device_path, packet.frame)
+
+                # Check camera stats
+                stats = session.get_camera_stats()
+                if stats:
+                    for device_path, stat in stats.items():
+                        print(f"{device_path}: {stat.measured_fps:.1f} fps")
     """
 
     def __init__(
         self,
         sources: list[FrameSource],
-        queue_size: int = 30,
-        enable_reports: bool = False,
-        report_interval_seconds: float = 2.0,
+        enable_monitoring: bool = True,
+        monitor_interval_seconds: float = 2.0,
+        recording_buffer_seconds: float = 5.0,
+        alignment_window_seconds: float = 3.0,
     ) -> None:
         """
         Initialize a CaptureSession.
 
         Args:
             sources: List of FrameSource instances to capture from
-            queue_size: Maximum frames to buffer per camera
-            enable_reports: If True, emit AlignmentReports for monitoring
-            report_interval_seconds: How often to emit reports (if enabled)
+            enable_monitoring: If True, track per-camera statistics
+            monitor_interval_seconds: How often to update monitoring stats
+            recording_buffer_seconds: Buffer size for recording queue (seconds)
+            alignment_window_seconds: Window for alignment statistics (seconds)
         """
         if not sources:
             raise CaptureSessionError("At least one FrameSource required")
 
         self.sources = sources
-        self.queue_size = queue_size
-        self.report_interval_seconds = report_interval_seconds
+        self.enable_monitoring = enable_monitoring
+        self.monitor_interval_seconds = monitor_interval_seconds
+        self.recording_buffer_seconds = recording_buffer_seconds
+        self.alignment_window_seconds = alignment_window_seconds
 
-        # Per-camera queues
-        self._producer_queues: dict[str, Queue[FramePacket | StopSignal]] = {}
+        # Per-camera queue bundles (display, recording, alignment)
+        self._producer_queues: dict[str, ProducerQueues] = {}
         self._producers: list[FrameProducer] = []
 
-        # Aligner output queue
-        self._cluster_queue: Queue[FrameCluster | None] = Queue(maxsize=queue_size)
-        self._aligner: FrameAligner | None = None
+        # Alignment monitor (if monitoring enabled)
+        self._alignment_monitor: AlignmentMonitor | None = None
 
-        # Report queue (optional)
-        self._report_queue: Queue[AlignmentReport] | None = Queue() if enable_reports else None
+        # Monitoring state (per-camera) - fallback if AlignmentMonitor not used
+        self._monitoring_window_start = 0.0
+        self._monitoring_last_frame_count: dict[str, int] = {}
+        self._latest_stats: dict[str, CameraStats] | None = None
 
         self._running = False
+        self._is_recording = Event()  # Shared flag for producers
 
     def start(self) -> None:
-        """Start all producers and aligner."""
+        """Start all producers."""
         if self._running:
             logger.warning("CaptureSession already running")
             return
@@ -91,89 +105,207 @@ class CaptureSession:
         # Cameras stay open - producers take over the already-running sources
         self._start_all_sources_parallel()
 
-        # Create per-camera queues and producers
-        for source in self.sources:
-            queue: Queue[FramePacket | StopSignal] = Queue(maxsize=self.queue_size)
-            self._producer_queues[source.device_path] = queue
+        # Initialize monitoring state
+        if self.enable_monitoring:
+            self._monitoring_window_start = time.perf_counter()
+            for source in self.sources:
+                self._monitoring_last_frame_count[source.device_path] = 0
 
-            producer = FrameProducer(source, queue)
+        # Create per-camera queue bundles and producers
+        for source in self.sources:
+            path = source.device_path
+
+            # Calculate buffer sizes based on assumed 30fps
+            buffer_size = int(self.recording_buffer_seconds * 30)
+
+            # Create three-queue bundle
+            self._producer_queues[path] = ProducerQueues(
+                display=Queue(maxsize=1),
+                recording=Queue(maxsize=buffer_size),
+                alignment=Queue(maxsize=buffer_size),
+            )
+
+            queues = self._producer_queues[path]
+            producer = FrameProducer(
+                source,
+                queues=queues,
+                is_recording=self._is_recording,
+            )
             self._producers.append(producer)
 
-        # Start all producers first (they push frames to queues)
+        # Start all producers
         for producer in self._producers:
             producer.start()
 
-        # Create and start aligner (consumes from queues)
-        # Uses nearest-neighbor algorithm, not fixed tolerance
-        self._aligner = FrameAligner(
-            input_queues=self._producer_queues,
-            output_queue=self._cluster_queue,
-            queue_timeout_seconds=5.0,  # Allow time for cameras to warm up
-            report_queue=self._report_queue,
-            report_interval_seconds=self.report_interval_seconds,
-        )
-        self._aligner.start()
+        # Start alignment monitor if monitoring enabled
+        if self.enable_monitoring:
+            alignment_queues = {path: queues.alignment for path, queues in self._producer_queues.items()}
+            self._alignment_monitor = AlignmentMonitor(
+                alignment_queues,
+                expected_cameras=len(self.sources),
+                window_seconds=self.alignment_window_seconds,
+            )
+            self._alignment_monitor.start()
 
         self._running = True
         logger.info("Capture session started")
 
     def stop(self) -> None:
-        """Stop all producers and aligner in correct order."""
+        """Stop all producers."""
         if not self._running:
             return
 
         logger.info("Stopping capture session")
 
-        # Stop producers first (stops frame flow)
+        # Stop recording if active
+        if self._is_recording.is_set():
+            self.stop_recording()
+
+        # Stop alignment monitor
+        if self._alignment_monitor is not None:
+            self._alignment_monitor.stop()
+
+        # Stop all producers
         for producer in self._producers:
             producer.stop()
-
-        # Then stop aligner (waits for queues to drain)
-        if self._aligner is not None:
-            self._aligner.stop()
 
         self._running = False
         logger.info("Capture session stopped")
 
-    def clusters(self) -> Iterator[FrameCluster]:
+    def get_latest_frames(self) -> dict[str, FramePacket | None]:
         """
-        Iterate over aligned frame clusters.
+        Get the most recent frame from each camera for display.
 
-        Automatically starts the session if not already running.
-        Yields clusters until session is stopped.
+        Returns a dict mapping device_path to FramePacket (or None if no
+        frame has been received yet from that camera).
+
+        This method is thread-safe and non-blocking. Frames are consumed
+        from the display queue - the producer's drop-oldest strategy ensures
+        the queue always has the latest frame.
         """
-        if not self._running:
-            self.start()
-
-        while self._running:
+        frames: dict[str, FramePacket | None] = {}
+        for device_path, queues in self._producer_queues.items():
             try:
-                cluster = self._cluster_queue.get(timeout=1.0)
-                if cluster is None:
-                    # End sentinel from aligner
-                    break
-                yield cluster
-            except Exception:
-                # Queue timeout - check if we should continue
-                if not self._running:
-                    break
+                # Consume the frame - producer's drop-oldest ensures it's latest
+                packet = queues.display.get_nowait()
+                frames[device_path] = packet
+            except Empty:
+                frames[device_path] = None
+        return frames
 
-    def get_latest_report(self) -> AlignmentReport | None:
+    def get_camera_stats(self) -> dict[str, CameraStats] | None:
         """
-        Get the latest alignment report (non-blocking).
+        Get per-camera performance statistics.
 
-        Returns the most recent report, discarding any older ones in the queue.
-        Returns None if no reports are available or reporting is disabled.
+        Returns None if monitoring is disabled. Otherwise returns a dict
+        mapping device_path to CameraStats.
+
+        If AlignmentMonitor is active, uses timestamp-based stats (accurate).
+        Otherwise falls back to frame counter-based stats (wall-clock estimate).
         """
-        if self._report_queue is None:
+        if not self.enable_monitoring:
             return None
 
-        latest: AlignmentReport | None = None
-        while True:
-            try:
-                latest = self._report_queue.get_nowait()
-            except Exception:
-                break
-        return latest
+        # Use AlignmentMonitor if available (more accurate)
+        if self._alignment_monitor is not None:
+            return self._alignment_monitor.get_camera_stats()
+
+        # Fallback: use wall-clock based monitoring
+        now = time.perf_counter()
+        elapsed = now - self._monitoring_window_start
+
+        if elapsed >= self.monitor_interval_seconds:
+            self._update_monitoring_stats()
+            self._monitoring_window_start = now
+
+        return self._latest_stats
+
+    def get_alignment_stats(self) -> AlignmentStats | None:
+        """
+        Get multi-camera alignment quality statistics.
+
+        Returns None if monitoring is disabled or no alignment data available yet.
+        """
+        if not self.enable_monitoring or self._alignment_monitor is None:
+            return None
+
+        return self._alignment_monitor.get_alignment_stats()
+
+    def start_recording(self, output_dir: Path) -> None:
+        """
+        Begin recording all cameras to output_dir.
+
+        Creates per-camera MP4 files and frametimes.csv files.
+        TODO: Recording implementation
+        """
+        if self._is_recording.is_set():
+            logger.warning("Already recording")
+            return
+
+        self._is_recording.set()
+        logger.info(f"Recording to {output_dir} - NOT IMPLEMENTED")
+        # TODO: Implement recording (spawn FrameRecorder threads)
+
+    def stop_recording(self) -> None:
+        """
+        Stop recording and finalize files.
+
+        TODO: Recording implementation
+        """
+        if not self._is_recording.is_set():
+            return
+
+        self._is_recording.clear()
+        logger.info("Stopping recording - NOT IMPLEMENTED")
+        # TODO: Stop FrameRecorder threads and finalize files
+
+    @property
+    def is_recording(self) -> bool:
+        """True if currently recording."""
+        return self._is_recording.is_set()
+
+    @property
+    def active_device_paths(self) -> list[str]:
+        """List of device paths for active cameras."""
+        return [source.device_path for source in self.sources]
+
+    def _update_monitoring_stats(self) -> None:
+        """
+        Update monitoring statistics from producer frame counters (fallback).
+
+        This is less accurate than AlignmentMonitor (uses wall-clock intervals
+        instead of actual frame timestamps). Only used if AlignmentMonitor
+        is not active.
+        """
+        camera_stats: dict[str, CameraStats] = {}
+
+        for producer in self._producers:
+            device_path = producer.device_path
+
+            # Calculate frames received this window
+            current_count = producer.frames_captured
+            last_count = self._monitoring_last_frame_count.get(device_path, 0)
+            frames_in_window = current_count - last_count
+            self._monitoring_last_frame_count[device_path] = current_count
+
+            # Calculate measured fps from monitoring interval
+            if frames_in_window > 0:
+                measured_fps = frames_in_window / self.monitor_interval_seconds
+            else:
+                measured_fps = 0.0
+
+            # Alignment queue depth
+            queue_depth = self._producer_queues[device_path].alignment.qsize()
+
+            camera_stats[device_path] = CameraStats(
+                device_path=device_path,
+                frames_in_window=frames_in_window,
+                measured_fps=measured_fps,
+                jitter_ms=0.0,  # Not available in fallback mode
+                queue_depth=queue_depth,
+            )
+
+        self._latest_stats = camera_stats
 
     def _start_all_sources_parallel(self) -> None:
         """

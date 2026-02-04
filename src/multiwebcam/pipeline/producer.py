@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import logging
-from queue import Queue
+from dataclasses import dataclass
+from queue import Empty, Queue
 from threading import Event, Thread
 from typing import TYPE_CHECKING
-
-from multiwebcam.pipeline.signals import StopSignal
 
 if TYPE_CHECKING:
     from multiwebcam.sources.device import FrameSource
@@ -16,39 +15,61 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class ProducerQueues:
+    """Bundle of output queues for a single camera."""
+
+    display: Queue[FramePacket]  # maxsize=1, drop-oldest
+    recording: Queue[FramePacket]  # large, blocking (only when recording)
+    alignment: Queue[FramePacket]  # large, for monitoring
+
+
 class FrameProducer:
     """
-    Threaded wrapper around FrameSource that pushes frames to a queue.
+    Threaded wrapper around FrameSource that pushes frames to multiple queues.
 
     The producer runs in its own thread, pulling frames from the FrameSource
-    and pushing them to an output queue. It respects stop/shutdown signals
-    for clean termination.
+    and pushing them to queues with different behaviors:
+    - Display queue: maxsize=1, drop-oldest for latest frame access
+    - Alignment queue: blocking puts for monitoring
+    - Recording queue: conditional (only when is_recording flag is set)
 
     Usage:
         source = FrameSource("/dev/video0")
-        queue: Queue[FramePacket | StopSignal] = Queue(maxsize=30)
-        producer = FrameProducer(source, queue)
+        is_recording = Event()
+        queues = ProducerQueues(
+            display=Queue(maxsize=1),
+            recording=Queue(maxsize=150),
+            alignment=Queue(maxsize=150),
+        )
+        producer = FrameProducer(source, queues, is_recording)
 
         producer.start()
-        # ... consume from queue ...
+        # ... consume from queues ...
         producer.stop()
     """
 
     def __init__(
-        self, source: FrameSource, output_queue: Queue[FramePacket | StopSignal]
+        self,
+        source: FrameSource,
+        queues: ProducerQueues,
+        is_recording: Event,
     ) -> None:
         """
         Initialize a FrameProducer.
 
         Args:
             source: FrameSource to capture from
-            output_queue: Queue to push FramePackets (or StopSignal on shutdown)
+            queues: ProducerQueues bundle for this camera
+            is_recording: Shared Event flag - only push to recording queue when set
         """
         self.source = source
-        self.output_queue = output_queue
+        self.queues = queues
+        self.is_recording = is_recording
         self._thread: Thread | None = None
         self._shutdown_event = Event()
         self._running = False
+        self._frames_captured = 0
 
     @property
     def is_running(self) -> bool:
@@ -59,6 +80,11 @@ class FrameProducer:
     def device_path(self) -> str:
         """Device path of the underlying source."""
         return self.source.device_path
+
+    @property
+    def frames_captured(self) -> int:
+        """Total frames captured by this producer."""
+        return self._frames_captured
 
     def start(self) -> None:
         """Start the producer thread."""
@@ -76,6 +102,9 @@ class FrameProducer:
         """
         Stop the producer thread.
 
+        Closes the source from main thread to unblock decode(), then waits
+        for producer thread to exit.
+
         Args:
             timeout: Maximum time to wait for thread to join (seconds)
         """
@@ -84,6 +113,10 @@ class FrameProducer:
 
         logger.info(f"Stopping producer for {self.device_path}")
         self._shutdown_event.set()
+
+        # Close the source to unblock decode() - do this from main thread
+        # This will cause the producer thread's decode() to raise an exception
+        self.source.stop()
 
         if self._thread is not None:
             self._thread.join(timeout=timeout)
@@ -102,18 +135,32 @@ class FrameProducer:
             self.source.start()
 
             for packet in self.source:
-                # Make frame array read-only to enforce immutability
-                packet.frame.flags.writeable = False
-
-                # Check for shutdown signal
                 if self._shutdown_event.is_set():
                     break
 
-                # Push to queue (blocks if full)
-                self.output_queue.put(packet)
+                # Make frame array read-only to enforce immutability
+                packet.frame.flags.writeable = False
+
+                self._frames_captured += 1
+
+                # Display queue: drop-oldest (always get latest)
+                try:
+                    self.queues.display.get_nowait()
+                except Empty:
+                    pass
+                self.queues.display.put_nowait(packet)
+
+                # Alignment queue: always push (for monitoring)
+                self.queues.alignment.put(packet)
+
+                # Recording queue: conditional on is_recording flag
+                if self.is_recording.is_set():
+                    self.queues.recording.put(packet)
 
         except Exception as e:
-            logger.error(f"Producer error on {self.device_path}: {e}", exc_info=True)
+            # Normal during shutdown when container is closed
+            if not self._shutdown_event.is_set():
+                logger.error(f"Producer error on {self.device_path}: {e}", exc_info=True)
         finally:
-            self.source.stop()
+            # Don't call source.stop() here - it's called from stop()
             logger.debug(f"Producer thread exiting for {self.device_path}")
