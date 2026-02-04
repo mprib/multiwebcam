@@ -627,6 +627,27 @@ white_balance = 4500
 focus = 75
 ```
 
+### Planned: Startup Workflow
+
+**Fresh start (no project):**
+1. Launch app with no arguments
+2. Discover connected cameras, connect with default settings
+3. User configures each camera (resolution, exposure, etc.)
+4. User saves: File > Save Project → picks folder → creates `multiwebcam.toml`
+5. That folder becomes the project root
+
+**Open existing project:**
+1. Launch app → File > Open → select folder containing `multiwebcam.toml`
+2. Load camera profiles from TOML
+3. Match cameras by `bus_info` (stable USB identifier)
+4. **Apply saved settings automatically** (resolution, exposure, gain, focus, etc.)
+5. If configured camera not found → show "offline" placeholder in grid
+6. User can start recording immediately with known-good settings
+
+**Config persistence:**
+- Settings save to TOML immediately when changed (via rtoml, instant)
+- No "Save" button needed - changes are always persisted
+
 ---
 
 ## Part 6: Module Structure
