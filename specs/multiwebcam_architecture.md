@@ -26,8 +26,8 @@ The core innovation: each camera pushes frames to THREE separate queues with dif
 
 ```
 FrameSource --> FrameProducer --> Display Queue (maxsize=1, drop-oldest)
-                             --> Recording Queue (blocking, preserve ALL)
-                             --> Alignment Queue (blocking, for monitoring)
+                            --> Recording Queue (blocking, preserve ALL)
+                            --> Alignment Queue (blocking, for monitoring)
 ```
 
 **Why three queues?**
@@ -384,6 +384,27 @@ This is validation, not correction. If timestamps are incompatible, we log it an
 
 ## Part 2: Recording System (PARTIALLY IMPLEMENTED)
 
+### Camera Identification: `cam_id`
+
+**Key design decision**: Cameras are identified by `cam_id`, an integer assigned when a camera is first added to the project.
+
+| Concept | Purpose | Example |
+|---------|---------|---------|
+| `cam_id` | Stable identifier in all data files | `0`, `1`, `2` |
+| `device_path` | Ephemeral V4L2 path (changes across reboots) | `/dev/video0` |
+| `bus_info` | Stable USB identifier for matching cameras | `usb-0000:00:14.0-3.1` |
+
+**Why `cam_id`?**
+- `device_path` changes when cameras are plugged in different order
+- `bus_info` is stable but unwieldy for filenames and CSV columns
+- `cam_id` is simple, human-readable, and stays consistent for the project lifetime
+
+**Assignment rules:**
+- `cam_id` starts at 0
+- Assigned sequentially when camera is first added to project
+- Never reused (even if camera is removed)
+- Persisted in `multiwebcam.toml`
+
 ### Current State
 
 **Implemented**:
@@ -413,9 +434,8 @@ class FrameRecorder:
 
     def __init__(
         self,
-        recording_queues: dict[str, Queue[FramePacket]],
+        recording_queues: dict[int, Queue[FramePacket]],  # cam_id -> queue
         output_dir: Path,
-        camera_labels: dict[str, str],  # device_path -> label for filenames
         codec: str = "h264",
         resolution: tuple[int, int] | None = None,  # If None, use first frame's resolution
     ) -> None: ...
@@ -436,8 +456,8 @@ class FrameRecorder:
     def is_running(self) -> bool: ...
 
     @property
-    def frames_written(self) -> dict[str, int]:
-        """Per-camera frame counts (device_path -> count)."""
+    def frames_written(self) -> dict[int, int]:
+        """Per-camera frame counts (cam_id -> count)."""
         ...
 
     @property
@@ -452,7 +472,7 @@ class FrameRecorder:
 @dataclass(frozen=True)
 class RecordingResult:
     output_dir: Path
-    frames_per_camera: dict[str, int]   # device_path -> frame count
+    frames_per_camera: dict[int, int]   # cam_id -> frame count
     duration_seconds: float
     errors: list[str]                   # Any non-fatal errors encountered
     frametimes_path: Path               # Path to frametimes.csv
@@ -469,7 +489,7 @@ class RecordingResult:
                                        |
               +------------------------+------------------------+
               |                        |                        |
-    CameraEncoder(cam0)      CameraEncoder(cam2)      CameraEncoder(cam4)
+    CameraEncoder(cam_0)      CameraEncoder(cam_1)      CameraEncoder(cam_2)
     - drains queue           - drains queue           - drains queue
     - writes MP4             - writes MP4             - writes MP4
     - reports timestamps     - reports timestamps     - reports timestamps
@@ -485,7 +505,7 @@ class RecordingResult:
 
 1. **One encoder thread per camera**: Each `CameraEncoder` drains its recording queue independently and writes to its own MP4 file. No cross-camera coordination during encoding.
 
-2. **Timestamps collected centrally**: Each encoder thread reports `(device_path, frame_index, frame_time)` to a thread-safe `FrametimesCollector`. The collector writes frametimes.csv when recording stops.
+2. **Timestamps collected centrally**: Each encoder thread reports `(cam_id, frame_index, frame_time)` to a thread-safe `FrametimesCollector`. The collector writes frametimes.csv when recording stops.
 
 3. **Sentinel-based shutdown**: When `stop()` is called:
    - `is_recording` flag is cleared (producers stop pushing)
@@ -509,11 +529,11 @@ class CameraEncoder:
 
     def __init__(
         self,
-        device_path: str,
+        cam_id: int,
         queue: Queue[FramePacket | None],  # None = sentinel
         output_path: Path,
         codec: str,
-        timestamp_callback: Callable[[str, int, float], None],
+        timestamp_callback: Callable[[int, int, float], None],  # (cam_id, frame_index, frame_time)
     ) -> None: ...
 
     def run(self) -> None:
@@ -527,46 +547,51 @@ class CameraEncoder:
 
 ### frametimes.csv Format
 
-**Revised format** - preserves per-camera frame indices for maximum flexibility in post-processing:
+**Simplified format** - uses `cam_id` as the stable identifier:
 
 ```csv
-device_path,frame_index,frame_time,timestamp_source
-/dev/video0,0,1234.567,pts
-/dev/video2,0,1234.568,pts
-/dev/video4,0,1234.565,pts
-/dev/video0,1,1234.600,pts
-/dev/video2,1,1234.601,pts
-/dev/video4,1,1234.599,pts
-/dev/video0,2,1234.633,pts
-/dev/video2,2,1234.634,pts
-/dev/video4,2,1234.632,pts
+cam_id,frame_index,frame_time
+0,0,1234.567890
+1,0,1234.568123
+2,0,1234.565012
+0,1,1234.600456
+1,1,1234.601234
+2,1,1234.599876
+0,2,1234.633123
+1,2,1234.634012
+2,2,1234.632456
 ```
-
-**Why this format (not the previous row-per-cluster format)?**
-
-The previous spec showed:
-```csv
-frame_index,camera_0_pts,camera_2_pts,camera_4_pts
-0,1234.567,1234.568,1234.565
-```
-
-This has problems:
-1. **Assumes cameras have same frame count** - they may not (hardware drops, staggered start)
-2. **Loses information** - which frame index from camera_2 corresponds to row 5?
-3. **Alignment is a downstream concern** - Caliscope should decide how to cluster, not us
-
-The long format (one row per frame) is:
-- Lossless - every frame's exact timestamp is preserved
-- Simple - no alignment logic needed during recording
-- Flexible - Caliscope can apply any clustering algorithm
 
 **Column definitions**:
-- `device_path`: Full V4L2 path (matches FramePacket.device_path)
-- `frame_index`: Per-camera sequential index (matches FramePacket.frame_index)
-- `frame_time`: PTS or wall-clock timestamp in seconds (matches FramePacket.frame_time)
-- `timestamp_source`: "pts" or "wall_clock" (matches FramePacket.timestamp_source)
+- `cam_id`: Stable camera identifier (integer, assigned per-project)
+- `frame_index`: Per-camera sequential index (matches MP4 frame number)
+- `frame_time`: PTS or wall-clock timestamp in seconds
+
+**What's NOT in frametimes.csv**:
+- `device_path` - Ephemeral, changes between sessions
+- `timestamp_source` - Not needed for downstream processing
+- `sync_index` - Temporal alignment is Caliscope's job, not ours
+
+**Why this format?**
+
+1. **Simple** - Three columns, easy to parse
+2. **Lossless** - Every frame's exact timestamp is preserved
+3. **Stable identifiers** - `cam_id` matches across sessions, unlike `device_path`
+4. **Alignment-agnostic** - Caliscope applies clustering algorithm, not us
 
 **File creation**: Written atomically at recording stop, not streamed during recording. This avoids partial writes if recording is interrupted.
+
+### Video Filename Convention
+
+Files use `cam_id` in filenames for consistency with frametimes.csv:
+
+```
+cam_0.mp4
+cam_1.mp4
+cam_2.mp4
+```
+
+The mapping from `cam_id` to human-readable label is stored in `multiwebcam.toml`, not embedded in filenames.
 
 ### Shutdown Sequence
 
@@ -623,38 +648,28 @@ When `CaptureSession.stop_recording()` is called:
 ```python
 # In CaptureSession
 
-def start_recording(self, output_dir: Path, camera_labels: dict[str, str] | None = None) -> None:
+def start_recording(self, output_dir: Path) -> None:
     """
     Begin recording all cameras to output_dir.
 
     Args:
         output_dir: Directory for MP4 files and frametimes.csv
-        camera_labels: Optional mapping of device_path -> label for filenames.
-                      If None, uses device_id (e.g., "camera_0.mp4")
     """
     if self._is_recording.is_set():
         raise CaptureSessionError("Already recording")
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Build default labels if not provided
-    if camera_labels is None:
-        camera_labels = {
-            path: f"camera_{path.split('video')[-1]}"
-            for path in self._producer_queues.keys()
-        }
-
-    # Extract recording queues
+    # Extract recording queues with cam_id keys
     recording_queues = {
-        path: queues.recording
-        for path, queues in self._producer_queues.items()
+        cam_id: self._producer_queues[cam_id].recording
+        for cam_id in self._producer_queues.keys()
     }
 
     # Create recorder
     self._frame_recorder = FrameRecorder(
         recording_queues=recording_queues,
         output_dir=output_dir,
-        camera_labels=camera_labels,
     )
 
     # Start recording (order matters: flag first, then recorder)
@@ -693,24 +708,25 @@ def stop_recording(self) -> RecordingResult | None:
 +-- multiwebcam.toml              # Camera profiles and settings
 +-- calibration/
 |   +-- intrinsic/
-|   |   +-- front_left.mp4        # One per camera, overwrite on re-record
-|   |   +-- overhead.mp4
-|   |   +-- side.mp4
+|   |   +-- cam_0.mp4             # One per camera, overwrite on re-record
+|   |   +-- cam_1.mp4
+|   |   +-- cam_2.mp4
 |   +-- extrinsic/
-|       +-- front_left.mp4        # ONE set per project, overwrite on re-record
-|       +-- overhead.mp4
-|       +-- side.mp4
+|       +-- cam_0.mp4             # ONE set per project, overwrite on re-record
+|       +-- cam_1.mp4
+|       +-- cam_2.mp4
 |       +-- frametimes.csv
 +-- recordings/
     +-- <trial_name>/             # Multiple trials, user names each one
-        +-- front_left.mp4
-        +-- overhead.mp4
-        +-- side.mp4
+        +-- cam_0.mp4
+        +-- cam_1.mp4
+        +-- cam_2.mp4
         +-- frametimes.csv
 ```
 
 **Key points:**
-- Filename = camera label (user-assigned, not device path)
+- Filename = `cam_<cam_id>.mp4` (stable across sessions)
+- Human-readable labels are stored in TOML, not filenames
 - Intrinsic: one MP4 per camera, no frametimes.csv, overwrite on re-record
 - Extrinsic: one set per project (no subfolders), overwrite on re-record
 - Recordings: multiple named trials, each in its own subfolder
@@ -790,7 +806,7 @@ The main view showing all cameras simultaneously.
 |  +-------------------+  +-------------------+  +-------------------+ |
 |  | [x]          [F]  |  | [x]          [F]  |  | [ ]          [F]  | |
 |  |    front_left     |  |     overhead      |  |       side        | |
-|  |    29.8 fps       |  |    30.1 fps       |  |    [OFFLINE]      | |
+|  |    29.8 fps       |  |    30.1 fps       |  |    [IGNORED]      | |
 |  |    jitter: 2.1ms  |  |    jitter: 1.8ms  |  |                   | |
 |  +-------------------+  +-------------------+  +-------------------+ |
 |                                                                      |
@@ -805,12 +821,21 @@ The main view showing all cameras simultaneously.
 ```
 
 **Per-tile elements:**
-- `[x]` checkbox - Enable/ignore this camera (unchecked = offline placeholder)
+- `[x]` checkbox - Include/ignore this camera for recording
+  - Checked = active, will be recorded
+  - Unchecked = ignored, excluded from recording
 - `[F]` button - Enter focus mode for this camera
-- Camera label (user-assigned)
+- Camera label (user-assigned, defaults to `cam_N`)
 - FPS (this camera's actual frame rate)
 - Jitter (this camera's timing consistency)
-- `[OFFLINE]` shown if camera ignored or not connected
+- `[IGNORED]` shown if checkbox unchecked (greyed out tile)
+
+**Ignored camera behavior:**
+- Tile appears greyed out with `[IGNORED]` status
+- Checkbox is unchecked
+- Still has a `cam_id` (identity is stable)
+- User can toggle checkbox to re-enable
+- Excluded from recording when ignored
 
 **Global controls:**
 - Recording FPS slider - Controls pull rate from ALL cameras
@@ -824,8 +849,8 @@ The main view showing all cameras simultaneously.
 - Average FPS
 
 **Actions from grid view:**
-- Record Extrinsic → `calibration/extrinsic/<camera>.mp4` + frametimes.csv
-- Record Trial → `recordings/<trial_name>/<camera>.mp4` + frametimes.csv
+- Record Extrinsic -> `calibration/extrinsic/cam_<id>.mp4` + frametimes.csv
+- Record Trial -> `recordings/<trial_name>/cam_<id>.mp4` + frametimes.csv
 
 ---
 
@@ -843,7 +868,7 @@ Enter by clicking [F] on any camera tile. Large preview for framing and settings
 |  |                                                               |  |
 |  |                                                               |  |
 |  |                    front_left (focused)                       |  |
-|  |                    /dev/video0                                |  |
+|  |                    cam_id: 0 | /dev/video0                    |  |
 |  |                    29.8 fps | jitter: 2.1ms                   |  |
 |  |                                                               |  |
 |  |                                                               |  |
@@ -867,8 +892,8 @@ Enter by clicking [F] on any camera tile. Large preview for framing and settings
 - All settings save to TOML immediately when changed
 
 **Actions from focus mode:**
-- Record Intrinsic → `calibration/intrinsic/<camera>.mp4` (no frametimes.csv)
-- Back to Grid → return to multi-camera view
+- Record Intrinsic -> `calibration/intrinsic/cam_<id>.mp4` (no frametimes.csv)
+- Back to Grid -> return to multi-camera view
 
 **Why focus mode for intrinsic?**
 Intrinsic calibration is per-camera (solo checkerboard views). You want a large preview to frame the checkerboard properly. Multi-camera recording (extrinsic/trials) happens from grid view.
@@ -889,8 +914,8 @@ Intrinsic calibration is per-camera (solo checkerboard views). You want a large 
 class PipelineBridge(QObject):
     """Polls queues on QTimer, emits Qt signals."""
 
-    frames_ready = Signal(dict)         # device_path -> QPixmap
-    stats_updated = Signal(dict)        # device_path -> CameraStats
+    frames_ready = Signal(dict)         # cam_id -> QPixmap
+    stats_updated = Signal(dict)        # cam_id -> CameraStats
     alignment_updated = Signal(object)  # AlignmentStats
 
     def __init__(
@@ -912,8 +937,10 @@ class PipelineBridge(QObject):
 ```python
 @dataclass(frozen=True)
 class CameraProfile:
-    label: str                      # User-assigned label
-    bus_info: str                   # Stable USB identifier
+    cam_id: int                     # Stable identifier (0, 1, 2, ...)
+    label: str                      # User-assigned label (defaults to "cam_N")
+    bus_info: str                   # Stable USB identifier for matching
+    ignore: bool                    # If True, excluded from recording
     resolution: tuple[int, int]
     pixel_format: str
     capture_fps: int
@@ -922,6 +949,12 @@ class CameraProfile:
     white_balance: int
     focus: int
 ```
+
+**Key fields:**
+- `cam_id`: Stable integer, assigned when camera first added to project
+- `label`: Human-readable name, defaults to `cam_N`, user can change
+- `bus_info`: USB topology identifier, used to match cameras on reload
+- `ignore`: If True, camera appears greyed out and is excluded from recording
 
 **No auto mode**: All V4L2 control values are required integers. Scientific reproducibility requires explicit settings.
 
@@ -932,8 +965,10 @@ class ProfileRepository:
     def __init__(self, project_path: Path) -> None: ...
     def load_all(self) -> list[CameraProfile]: ...
     def save(self, profile: CameraProfile) -> None: ...
-    def delete(self, label: str) -> None: ...
+    def delete(self, cam_id: int) -> None: ...
     def get_by_bus_info(self, bus_info: str) -> CameraProfile | None: ...
+    def get_by_cam_id(self, cam_id: int) -> CameraProfile | None: ...
+    def next_cam_id(self) -> int: ...  # Returns max(cam_ids) + 1, or 0 if empty
 ```
 
 ### Planned: Project Config (multiwebcam.toml)
@@ -943,8 +978,10 @@ class ProfileRepository:
 name = "lab_recording_2024"
 
 [[cameras]]
+cam_id = 0
 label = "front_left"
 bus_info = "usb-0000:00:14.0-3.1"
+ignore = false
 resolution = [1280, 720]
 pixel_format = "mjpeg"
 capture_fps = 30
@@ -952,6 +989,32 @@ exposure = 150
 gain = 32
 white_balance = 4500
 focus = 75
+
+[[cameras]]
+cam_id = 1
+label = "overhead"
+bus_info = "usb-0000:00:14.0-3.2"
+ignore = false
+resolution = [1280, 720]
+pixel_format = "mjpeg"
+capture_fps = 30
+exposure = 200
+gain = 40
+white_balance = 4500
+focus = 80
+
+[[cameras]]
+cam_id = 2
+label = "side"
+bus_info = "usb-0000:00:14.0-4"
+ignore = true  # User disabled this camera
+resolution = [1280, 720]
+pixel_format = "mjpeg"
+capture_fps = 30
+exposure = 100
+gain = 20
+white_balance = 4500
+focus = 50
 ```
 
 ### Planned: Startup Workflow
@@ -959,17 +1022,27 @@ focus = 75
 **Fresh start (no project):**
 1. Launch app with no arguments
 2. Discover connected cameras, connect with default settings
-3. User configures each camera (resolution, exposure, etc.)
-4. User saves: File > Save Project → picks folder → creates `multiwebcam.toml`
-5. That folder becomes the project root
+3. Assign temporary `cam_id` values (0, 1, 2, ...)
+4. User configures each camera (resolution, exposure, etc.)
+5. User saves: File > Save Project -> picks folder -> creates `multiwebcam.toml`
+6. That folder becomes the project root, `cam_id` assignments are now permanent
 
 **Open existing project:**
-1. Launch app → File > Open → select folder containing `multiwebcam.toml`
+1. Launch app -> File > Open -> select folder containing `multiwebcam.toml`
 2. Load camera profiles from TOML
-3. Match cameras by `bus_info` (stable USB identifier)
-4. **Apply saved settings automatically** (resolution, exposure, gain, focus, etc.)
-5. If configured camera not found → show "offline" placeholder in grid
-6. User can start recording immediately with known-good settings
+3. Discover connected cameras (get `bus_info` for each)
+4. Match cameras by `bus_info`:
+   - If match found -> auto-assign `cam_id` from profile
+   - If no match -> prompt user to confirm assignment
+5. Apply saved settings automatically (resolution, exposure, gain, focus, etc.)
+6. If configured camera not found -> show "offline" placeholder in grid (greyed, checkbox unchecked)
+7. User can start recording immediately with known-good settings
+
+**Mismatch handling:**
+When `bus_info` doesn't match (camera plugged into different USB port):
+- Show dialog: "Camera 'front_left' was at usb-X, now found at usb-Y. Use this camera?"
+- User confirms or reassigns
+- Update `bus_info` in TOML if confirmed
 
 **Config persistence:**
 - Settings save to TOML immediately when changed (via rtoml, instant)
@@ -1052,7 +1125,7 @@ src/multiwebcam/
 
 Tasks:
 1. `recording/frametimes.py` - FrametimesCollector
-   - Thread-safe collection of (device_path, frame_index, frame_time, timestamp_source)
+   - Thread-safe collection of (cam_id, frame_index, frame_time)
    - write_frametimes_csv() for atomic file writing
 2. `recording/encoder.py` - CameraEncoder
    - Per-camera worker thread
@@ -1076,8 +1149,9 @@ Tasks:
 **Open questions resolved**:
 - Thread model: One encoder thread per camera + central timestamp collector
 - Shutdown: Sentinel-based drain with timeout
-- frametimes format: Long format (one row per frame)
+- frametimes format: Simple three-column format (cam_id, frame_index, frame_time)
 - Error handling: Log and continue, report in RecordingResult
+- Camera identification: Use `cam_id` (integer) as stable identifier
 
 ### Phase 3: Qt Display (NO RECORDING)
 
@@ -1136,11 +1210,15 @@ Tasks:
 
 2. **Recording codec options**: Should we expose codec settings or use sensible defaults? Initial recommendation: defaults only (h264).
 
-3. **Camera label assignment**: How does user map device_path to meaningful labels? Via profile editor.
+3. ~~**Camera label assignment**: How does user map device_path to meaningful labels? Via profile editor.~~ **Resolved**: Users edit the `label` field in the profile editor. Defaults to `cam_N`.
 
 4. **Reconnection handling**: If a camera disconnects during recording, what happens to the other cameras? Current answer: they keep recording, disconnected camera's file is finalized.
 
 5. ~~**Memory pressure**: Current design doesn't auto-regulate fps on memory pressure. Recording queues could grow unbounded if recorder can't keep up. May need monitoring + backpressure.~~ **Resolved**: FrameRecorder drains queues continuously. If encoder can't keep up with capture rate, queue grows; if it exceeds buffer size, producers block (bounded queue). This is acceptable for recording - slight latency increase won't affect recorded content.
+
+6. ~~**Camera identification in data files**: Should we use device_path, port, or something else?~~ **Resolved**: Use `cam_id` (integer). It's stable across sessions, simple, and matches Caliscope's `port` concept (will eventually be renamed to `cam_id` in Caliscope for consistency).
+
+7. ~~**Temporal alignment responsibility**: Should multiwebcam produce sync_index clusters?~~ **Resolved**: No. Temporal alignment (clustering frames into sync groups) is Caliscope's job. Multiwebcam just records truthfully with accurate timestamps. The "widen bucket until duplicate" algorithm is used by Caliscope for alignment.
 
 ---
 
