@@ -46,6 +46,7 @@ from multiwebcam.pipeline.producer import FrameProducer, ProducerQueues
 from multiwebcam.pipeline.report import CameraStats
 from multiwebcam.pipeline.session import CaptureSession, CaptureSessionError
 from multiwebcam.pipeline.signals import ShutdownSignal, StartSignal, StopSignal
+from multiwebcam.recording.recorder import RecordingResult
 
 __all__ = [
     "AlignmentMonitor",
@@ -55,6 +56,7 @@ __all__ = [
     "CaptureSessionError",
     "FrameProducer",
     "ProducerQueues",
+    "RecordingResult",
     "ShutdownSignal",
     "StartSignal",
     "StopSignal",

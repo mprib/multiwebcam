@@ -11,6 +11,7 @@ from threading import Event
 from multiwebcam.pipeline.alignment import AlignmentMonitor, AlignmentStats
 from multiwebcam.pipeline.producer import FrameProducer, ProducerQueues
 from multiwebcam.pipeline.report import CameraStats
+from multiwebcam.recording.recorder import FrameRecorder, RecordingResult
 from multiwebcam.sources.device import FrameSource
 from multiwebcam.sources.frame_packet import FramePacket
 
@@ -92,6 +93,7 @@ class CaptureSession:
 
         self._running = False
         self._is_recording = Event()  # Shared flag for producers
+        self._frame_recorder: FrameRecorder | None = None  # Created on start_recording()
 
     def start(self) -> None:
         """Start all producers."""
@@ -231,33 +233,93 @@ class CaptureSession:
 
         return self._alignment_monitor.get_alignment_stats()
 
-    def start_recording(self, output_dir: Path) -> None:
+    def start_recording(self, output_dir: Path, cam_ids: dict[str, int] | None = None) -> None:
         """
         Begin recording all cameras to output_dir.
 
-        Creates per-camera MP4 files and frametimes.csv files.
-        TODO: Recording implementation
+        Args:
+            output_dir: Directory for MP4 files and frametimes.csv
+            cam_ids: Optional mapping of device_path -> cam_id for filenames.
+                    If None, auto-assigns based on device_id from path
+                    (e.g., /dev/video0 -> 0, /dev/video2 -> 1)
+
+        Raises:
+            CaptureSessionError: If already recording
         """
         if self._is_recording.is_set():
-            logger.warning("Already recording")
-            return
+            raise CaptureSessionError("Already recording")
 
+        if not self._running:
+            raise CaptureSessionError("Session not started - call start() first")
+
+        # Build default cam_ids if not provided
+        if cam_ids is None:
+            cam_ids = {}
+            for i, path in enumerate(sorted(self._producer_queues.keys())):
+                # Extract device_id from path (e.g., /dev/video0 -> 0)
+                try:
+                    device_id = int(path.split('video')[-1])
+                    cam_ids[path] = device_id
+                except ValueError:
+                    # Fallback to enumeration if path doesn't match expected format
+                    cam_ids[path] = i
+
+        # Extract recording queues
+        recording_queues = {
+            path: queues.recording
+            for path, queues in self._producer_queues.items()
+        }
+
+        # Create recorder
+        self._frame_recorder = FrameRecorder(
+            recording_queues=recording_queues,
+            output_dir=output_dir,
+            cam_ids=cam_ids,
+        )
+
+        # Start recording (order matters: flag first, then recorder)
         self._is_recording.set()
-        logger.info(f"Recording to {output_dir} - NOT IMPLEMENTED")
-        # TODO: Implement recording (spawn FrameRecorder threads)
+        self._frame_recorder.start()
 
-    def stop_recording(self) -> None:
+        logger.info(f"Recording started to {output_dir}")
+
+    def stop_recording(self) -> RecordingResult | None:
         """
         Stop recording and finalize files.
 
-        TODO: Recording implementation
+        Returns RecordingResult with frame counts and any errors,
+        or None if not recording.
+
+        The recording process:
+        1. Clear is_recording flag (producers stop pushing)
+        2. Send sentinel (None) to each recording queue
+        3. Recorder drains queues and finalizes MP4 + frametimes.csv
         """
         if not self._is_recording.is_set():
-            return
+            logger.warning("Not recording, nothing to stop")
+            return None
 
+        if self._frame_recorder is None:
+            logger.error("Recording flag set but no recorder exists")
+            self._is_recording.clear()
+            return None
+
+        logger.info("Stopping recording...")
+
+        # Clear flag first (producers stop pushing)
         self._is_recording.clear()
-        logger.info("Stopping recording - NOT IMPLEMENTED")
-        # TODO: Stop FrameRecorder threads and finalize files
+
+        # Send sentinels to all recording queues
+        for queues in self._producer_queues.values():
+            queues.recording.put(None)
+
+        # Stop recorder (drains queues, finalizes files)
+        result = self._frame_recorder.stop()
+        self._frame_recorder = None
+
+        logger.info(f"Recording stopped: {result.duration_seconds:.1f}s, {sum(result.frames_per_camera.values())} frames")
+
+        return result
 
     @property
     def is_recording(self) -> bool:

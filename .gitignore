@@ -17,4 +17,6 @@ tests/tmp/
 
 # Keep exploration scripts, ignore ad-hoc scripts
 scripts/*.py
-!scripts/pyav_exploration/
+!scripts/test_recording.py
+!scripts/pyav_exploration/tmp/
+tmp/

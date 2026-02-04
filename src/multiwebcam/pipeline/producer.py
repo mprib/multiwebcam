@@ -20,7 +20,7 @@ class ProducerQueues:
     """Bundle of output queues for a single camera."""
 
     display: Queue[FramePacket]  # maxsize=1, drop-oldest
-    recording: Queue[FramePacket]  # large, blocking (only when recording)
+    recording: Queue[FramePacket | None]  # large, blocking (only when recording); None = sentinel
     alignment: Queue[FramePacket]  # large, for monitoring
 
 
