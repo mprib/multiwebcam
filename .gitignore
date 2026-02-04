@@ -18,6 +18,3 @@ tests/tmp/
 # Keep exploration scripts, ignore ad-hoc scripts
 scripts/*.py
 !scripts/pyav_exploration/
-
-# Spec documents (temporary planning docs)
-specs/
