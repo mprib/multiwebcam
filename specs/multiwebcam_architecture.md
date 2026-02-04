@@ -527,7 +527,15 @@ else:
 
 ## Part 4: UI Structure (NOT IMPLEMENTED)
 
-### Planned: Single View with Camera Grid
+### Two View Modes
+
+The app has two view modes: **Grid View** (multi-camera) and **Focus Mode** (single camera).
+
+---
+
+### Grid View (Multi-Camera)
+
+The main view showing all cameras simultaneously.
 
 ```
 +---------------------------------------------------------------------+
@@ -536,17 +544,92 @@ else:
 | File                                                                 |
 +---------------------------------------------------------------------+
 |  +-------------------+  +-------------------+  +-------------------+ |
-|  |              [F]  |  |              [F]  |              [F]     | |
-|  |    camera_0       |  |     camera_2      |       camera_4       | |
-|  |    23.5 fps       |  |    30.1 fps       |    29.8 fps          | |
-|  |    12ms spread    |  |                   |                      | |
+|  | [x]          [F]  |  | [x]          [F]  |  | [ ]          [F]  | |
+|  |    front_left     |  |     overhead      |  |       side        | |
+|  |    29.8 fps       |  |    30.1 fps       |  |    [OFFLINE]      | |
+|  |    jitter: 2.1ms  |  |    jitter: 1.8ms  |  |                   | |
 |  +-------------------+  +-------------------+  +-------------------+ |
 |                                                                      |
-|  [Record] [Stop]                              Duration: 00:00:00    |
+|  Recording FPS: [====*=====] 30        Recording Type: (*) Extrinsic |
+|                                                        ( ) Trial     |
+|  Trial Name: [________________]                                      |
+|                                                                      |
+|  [Record All] [Stop]                            Duration: 00:00:00  |
 +---------------------------------------------------------------------+
-| Status: 3 cameras | FPS: 27.8 avg | Complete: 95% | Memory: 234 MB  |
+| Cameras: 2/3 | Spread: 17ms | Complete: 83% | FPS: 29.9 avg         |
 +---------------------------------------------------------------------+
 ```
+
+**Per-tile elements:**
+- `[x]` checkbox - Enable/ignore this camera (unchecked = offline placeholder)
+- `[F]` button - Enter focus mode for this camera
+- Camera label (user-assigned)
+- FPS (this camera's actual frame rate)
+- Jitter (this camera's timing consistency)
+- `[OFFLINE]` shown if camera ignored or not connected
+
+**Global controls:**
+- Recording FPS slider - Controls pull rate from ALL cameras
+- Recording type selector - Extrinsic or Trial
+- Trial name field - Only shown when Trial selected
+
+**Status bar (global metrics):**
+- Camera count (active/configured)
+- Alignment spread (how far apart timestamps are across cameras)
+- Cluster completeness (% of clusters with all cameras present)
+- Average FPS
+
+**Actions from grid view:**
+- Record Extrinsic → `calibration/extrinsic/<camera>.mp4` + frametimes.csv
+- Record Trial → `recordings/<trial_name>/<camera>.mp4` + frametimes.csv
+
+---
+
+### Focus Mode (Single Camera)
+
+Enter by clicking [F] on any camera tile. Large preview for framing and settings adjustment.
+
+```
++---------------------------------------------------------------------+
+| multiwebcam                                        [Settings] [?]    |
++---------------------------------------------------------------------+
+| File                                                                 |
++---------------------------------------------------------------------+
+|  +---------------------------------------------------------------+  |
+|  |                                                               |  |
+|  |                                                               |  |
+|  |                    front_left (focused)                       |  |
+|  |                    /dev/video0                                |  |
+|  |                    29.8 fps | jitter: 2.1ms                   |  |
+|  |                                                               |  |
+|  |                                                               |  |
+|  +---------------------------------------------------------------+  |
+|                                                                      |
+|  Resolution: [v 1280x720]   Format: [v MJPEG]   FPS: [v 30]         |
+|                                                                      |
+|  Exposure:       [----*------] 150                                  |
+|  Gain:           [--*--------] 32                                   |
+|  White Balance:  [---*-------] 4500                                 |
+|  Focus:          [------*----] 75                                   |
+|                                                                      |
+|  [Record Intrinsic]                            [Back to Grid]       |
++---------------------------------------------------------------------+
+```
+
+**Focus mode features:**
+- Large preview for precise framing
+- Resolution/format/FPS dropdowns (changes require camera restart)
+- V4L2 control sliders (exposure, gain, white balance, focus)
+- All settings save to TOML immediately when changed
+
+**Actions from focus mode:**
+- Record Intrinsic → `calibration/intrinsic/<camera>.mp4` (no frametimes.csv)
+- Back to Grid → return to multi-camera view
+
+**Why focus mode for intrinsic?**
+Intrinsic calibration is per-camera (solo checkerboard views). You want a large preview to frame the checkerboard properly. Multi-camera recording (extrinsic/trials) happens from grid view.
+
+---
 
 ### Planned: MVP Layer Design
 
