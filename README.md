@@ -1,31 +1,23 @@
 # multiwebcam
 
-Multi-camera capture and recording for USB webcams on Linux.
-
-## Status: Under Active Revision
-
-This project is being rebuilt from the ground up. The previous OpenCV-based implementation has been replaced with a PyAV/FFmpeg backend for more reliable V4L2 device handling.
-
-**Platform:** Linux only. USB webcam support on Linux is inherently fussy—different cameras have different quirks, V4L2 drivers vary, and USB bandwidth constraints are real. No promises are made about this software working on your specific hardware configuration.
-
-**Current state:**
-- Frame capture via PyAV (working)
-- Multi-camera recording to MP4 + timestamps (working)
-- Camera profile persistence (working)
-- Qt UI for live preview and recording (not yet implemented)
+Multi-camera capture and recording for USB webcams on Linux. Output feeds into [Caliscope](https://github.com/mprib/caliscope) for calibration and 3D reconstruction.
 
 ## What This Does
 
-Captures frames from multiple USB webcams simultaneously and records them to individual MP4 files with accurate timestamps. The output is designed to feed into [Caliscope](https://github.com/mprib/caliscope) for multi-camera calibration and 3D reconstruction.
+Captures video from multiple USB webcams simultaneously, recording to individual MP4 files with accurate timestamps. Each camera gets:
+- `cam_N.mp4` - H.264 encoded video
+- `cam_N_frametimes.csv` - Frame timestamps for temporal alignment
 
-This is **not** hardware-synchronized capture. Consumer USB webcams have no genlock capability. We capture frames independently and record timestamps so downstream tools can align them temporally (typical precision: 10-50ms).
+This is **not** hardware-synchronized capture. Consumer USB webcams have no genlock. We capture independently and record timestamps so Caliscope can align frames temporally (typical precision: 10-50ms).
 
 ## Requirements
 
 - Linux with V4L2 support
 - Python 3.11+
 - v4l2-utils (`sudo apt install v4l-utils`)
-- USB webcams (tested with Logitech C920, eMeet C960, Razer Kiyo Pro)
+- USB webcams
+
+Tested with: Logitech C920/C930e, eMeet C960, Razer Kiyo Pro
 
 ## Installation
 
@@ -37,8 +29,61 @@ uv sync
 
 ## Usage
 
-The GUI is not yet implemented. For now, see `scripts/` for example usage of the capture pipeline.
+Run from any directory you want to use as a project folder:
+
+```bash
+mwc
+# or
+multiwebcam
+```
+
+On first run, cameras are discovered and saved to `multiwebcam.toml`. On subsequent runs, the saved configuration is loaded.
+
+### Controls
+
+- **Grid View**: Shows all cameras with live preview and stats
+- **Focus**: Click to see single camera large
+- **Back to Grid**: Return to multi-camera view
+- **Record/Stop**: Start/stop recording to `recordings/` folder
+
+### Output Structure
+
+```
+your_project/
+├── multiwebcam.toml      # Camera configuration
+└── recordings/
+    ├── cam_0.mp4
+    ├── cam_0_frametimes.csv
+    ├── cam_1.mp4
+    ├── cam_1_frametimes.csv
+    └── ...
+```
+
+## Troubleshooting
+
+**Camera not detected?**
+```bash
+v4l2-ctl --list-devices
+```
+
+**Dark/overexposed image?**
+Check exposure mode:
+```bash
+v4l2-ctl -d /dev/video0 --get-ctrl=auto_exposure
+v4l2-ctl -d /dev/video0 --set-ctrl=auto_exposure=3  # Auto mode
+```
+
+**Permission denied?**
+Add user to video group:
+```bash
+sudo usermod -aG video $USER
+# Log out and back in
+```
 
 ## License
 
-See LICENSE file.
+BSD-2-Clause. See LICENSE file.
+
+## Related
+
+- [Caliscope](https://github.com/mprib/caliscope) - Multi-camera calibration and 3D reconstruction
