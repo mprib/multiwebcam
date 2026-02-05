@@ -2,7 +2,7 @@
 
 import pytest
 
-from multiwebcam.profiles.camera_profile import CameraProfile
+from multiwebcam.profiles.camera_profile import CameraProfile, ControlValue
 from multiwebcam.profiles.repository import ProfileParseError, ProfileRepository
 
 
@@ -128,44 +128,69 @@ def test_malformed_toml_raises(tmp_path):
         repo.load_all()
 
 
-def test_v4l2_controls_optional(tmp_path):
-    """V4L2 controls can be None (omitted in TOML)."""
+def test_controls_empty(tmp_path):
+    """Empty controls dict is omitted from TOML."""
     repo = ProfileRepository(tmp_path)
+    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-1")
+
+    repo.save(profile)
+
+    # Check TOML doesn't have controls section
+    toml_content = (tmp_path / "multiwebcam.toml").read_text()
+    assert "controls" not in toml_content
+
+    loaded = repo.load_all()[0]
+    assert loaded.controls == {}
+
+
+def test_controls_roundtrip(tmp_path):
+    """Controls dict with ControlValue round-trips correctly."""
+    repo = ProfileRepository(tmp_path)
+    controls = {
+        "exposure": ControlValue(value=150, min=3, max=2047),
+        "brightness": ControlValue(value=128, min=0, max=255),
+        "gain": ControlValue(value=32, min=0, max=100),
+    }
     profile = CameraProfile(
         cam_id=0,
         bus_info="usb-1",
         label="test",
-        exposure=None,  # Explicitly None
-        gain=32,  # Has a value
+        controls=controls,
     )
 
     repo.save(profile)
     loaded = repo.load_all()[0]
 
-    assert loaded.exposure is None
-    assert loaded.gain == 32
+    assert loaded.controls == controls
+    assert loaded.controls["exposure"].value == 150
+    assert loaded.controls["exposure"].min == 3
+    assert loaded.controls["exposure"].max == 2047
+    assert loaded.controls["brightness"].value == 128
+    assert loaded.controls["gain"].value == 32
 
 
-def test_v4l2_controls_all_set(tmp_path):
-    """All V4L2 controls round-trip correctly."""
+def test_controls_toml_format(tmp_path):
+    """Verify TOML format for controls."""
     repo = ProfileRepository(tmp_path)
+    controls = {
+        "brightness": ControlValue(value=128, min=0, max=255),
+    }
     profile = CameraProfile(
         cam_id=0,
         bus_info="usb-1",
         label="test",
-        exposure=150,
-        gain=32,
-        white_balance=4500,
-        focus=75,
+        controls=controls,
     )
 
     repo.save(profile)
-    loaded = repo.load_all()[0]
 
-    assert loaded.exposure == 150
-    assert loaded.gain == 32
-    assert loaded.white_balance == 4500
-    assert loaded.focus == 75
+    # Check TOML structure
+    toml_content = (tmp_path / "multiwebcam.toml").read_text()
+    assert "controls" in toml_content
+    assert "brightness" in toml_content
+    assert "value = 128" in toml_content
+    assert "min = 0" in toml_content
+    assert "max = 255" in toml_content
 
 
 def test_forward_compatibility_unknown_fields(tmp_path):
@@ -231,18 +256,23 @@ if __name__ == "__main__":
     # Test multiple profiles
     print("Test: multiple profiles")
     repo.save(CameraProfile.with_defaults(cam_id=1, bus_info="usb-test-2", label="camera_2"))
+
+    # Test with controls
+    controls = {
+        "exposure": ControlValue(value=150, min=3, max=2047),
+        "brightness": ControlValue(value=128, min=0, max=255),
+    }
     repo.save(
         CameraProfile(
             cam_id=2,
             bus_info="usb-test-3",
             label="camera_3",
-            exposure=150,
-            gain=32,
+            controls=controls,
         )
     )
     all_profiles = repo.load_all()
     print(f"Total profiles: {len(all_profiles)}")
     for p in all_profiles:
-        print(f"  cam_id={p.cam_id}, label={p.label}, bus_info={p.bus_info}")
+        print(f"  cam_id={p.cam_id}, label={p.label}, bus_info={p.bus_info}, controls={len(p.controls)}")
 
     print("\nDone. Check TOML file for structure.")

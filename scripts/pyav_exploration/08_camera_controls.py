@@ -20,10 +20,12 @@ from dataclasses import dataclass
 
 @dataclass
 class V4L2Control:
-    """A V4L2 camera control with its properties."""
+    """A V4L2 camera control with its properties.
+
+    The name field serves as the control identifier (e.g., "exposure_auto").
+    """
 
     name: str
-    id: str  # v4l2 control ID (e.g., "exposure_auto")
     type: str  # int, bool, menu
     min: int | None
     max: int | None
@@ -34,7 +36,10 @@ class V4L2Control:
 
     def __str__(self) -> str:
         if self.type == "menu" and self.menu_items:
-            current_name = self.menu_items.get(self.current, str(self.current))
+            if self.current is not None:
+                current_name = self.menu_items.get(self.current, str(self.current))
+            else:
+                current_name = "None"
             return f"{self.name}: {current_name} (menu)"
         elif self.type == "bool":
             return f"{self.name}: {'ON' if self.current else 'OFF'}"
@@ -86,7 +91,6 @@ def parse_controls(output: str) -> list[V4L2Control]:
 
             current_control = V4L2Control(
                 name=name,
-                id=name,
                 type=ctrl_type,
                 min=props.get("min"),
                 max=props.get("max"),

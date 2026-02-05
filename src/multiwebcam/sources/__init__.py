@@ -26,6 +26,7 @@ Example:
 """
 
 from multiwebcam.sources.config import FrameSourceConfig, FrameSourceStatus
+from multiwebcam.sources.controls import V4L2Control, get_control_value, parse_controls, query_controls, set_control
 from multiwebcam.sources.conversion import frame_to_bgr
 from multiwebcam.sources.device import FrameSource, FrameSourceError
 from multiwebcam.sources.discovery import (
@@ -43,8 +44,13 @@ __all__ = [
     "FrameSourceError",
     "FrameSourceOptions",
     "FrameSourceStatus",
+    "V4L2Control",
     "VideoMode",
     "discover_frame_sources",
     "frame_to_bgr",
+    "get_control_value",
     "get_frame_source_options",
+    "parse_controls",
+    "query_controls",
+    "set_control",
 ]

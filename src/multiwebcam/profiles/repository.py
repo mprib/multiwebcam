@@ -7,7 +7,7 @@ from pathlib import Path
 
 import rtoml
 
-from multiwebcam.profiles.camera_profile import CameraProfile
+from multiwebcam.profiles.camera_profile import CameraProfile, ControlValue
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +184,7 @@ class ProfileRepository:
     def _profile_to_dict(self, profile: CameraProfile) -> dict:
         """Convert profile to dict for TOML serialization.
 
-        Omits V4L2 controls that are None.
+        Omits empty controls dict.
         """
         d = {
             "cam_id": profile.cam_id,
@@ -196,15 +196,12 @@ class ProfileRepository:
             "capture_fps": profile.capture_fps,
         }
 
-        # Add V4L2 controls only if not None
-        if profile.exposure is not None:
-            d["exposure"] = profile.exposure
-        if profile.gain is not None:
-            d["gain"] = profile.gain
-        if profile.white_balance is not None:
-            d["white_balance"] = profile.white_balance
-        if profile.focus is not None:
-            d["focus"] = profile.focus
+        # Add V4L2 controls as nested dict if any exist
+        if profile.controls:
+            d["controls"] = {
+                name: {"value": cv.value, "min": cv.min, "max": cv.max}
+                for name, cv in profile.controls.items()
+            }
 
         return d
 
@@ -229,11 +226,15 @@ class ProfileRepository:
         pixel_format = d.get("pixel_format", "mjpeg")
         capture_fps = d.get("capture_fps", 30)
 
-        # Optional V4L2 controls
-        exposure = d.get("exposure")
-        gain = d.get("gain")
-        white_balance = d.get("white_balance")
-        focus = d.get("focus")
+        # V4L2 controls as dict[str, ControlValue]
+        controls = {}
+        controls_dict = d.get("controls", {})
+        for name, cv_dict in controls_dict.items():
+            controls[name] = ControlValue(
+                value=cv_dict["value"],
+                min=cv_dict["min"],
+                max=cv_dict["max"],
+            )
 
         return CameraProfile(
             cam_id=cam_id,
@@ -243,8 +244,5 @@ class ProfileRepository:
             resolution=resolution,
             pixel_format=pixel_format,
             capture_fps=capture_fps,
-            exposure=exposure,
-            gain=gain,
-            white_balance=white_balance,
-            focus=focus,
+            controls=controls,
         )

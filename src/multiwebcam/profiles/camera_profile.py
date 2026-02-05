@@ -3,10 +3,27 @@
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
+class ControlValue:
+    """A V4L2 control setting with its constraints."""
+
+    value: int
+    min: int
+    max: int
+
+    def __post_init__(self) -> None:
+        if self.min > self.max:
+            raise ValueError(f"min ({self.min}) cannot be greater than max ({self.max})")
+        if not (self.min <= self.value <= self.max):
+            raise ValueError(
+                f"value ({self.value}) must be between min ({self.min}) and max ({self.max})"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class CameraProfile:
     """Persistent camera configuration.
 
@@ -31,11 +48,8 @@ class CameraProfile:
     pixel_format: str = "mjpeg"
     capture_fps: int = 30
 
-    # V4L2 controls (optional - not all cameras support all controls)
-    exposure: int | None = None
-    gain: int | None = None
-    white_balance: int | None = None
-    focus: int | None = None
+    # V4L2 controls (optional - flexible dict of control_name: ControlValue)
+    controls: dict[str, ControlValue] = field(default_factory=dict)
 
     @classmethod
     def with_defaults(cls, cam_id: int, bus_info: str, label: str | None = None) -> CameraProfile:
@@ -67,3 +81,8 @@ class CameraProfile:
     def with_updates(self, **kwargs) -> CameraProfile:
         """Return new profile with updated fields."""
         return dataclasses.replace(self, **kwargs)
+
+    def with_control(self, name: str, control: ControlValue) -> CameraProfile:
+        """Return new profile with added/updated control."""
+        new_controls = {**self.controls, name: control}
+        return dataclasses.replace(self, controls=new_controls)
