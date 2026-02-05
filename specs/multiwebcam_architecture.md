@@ -277,7 +277,15 @@ class CaptureSession:
 - Starts all sources in parallel via ThreadPoolExecutor
 - Validates PTS epoch compatibility across cameras
 - Creates and starts AlignmentMonitor (if monitoring enabled)
-- Context manager support (`with CaptureSession(...) as session:`)
+- **Explicit lifecycle** via `start()`/`stop()` - no context manager (session is long-lived, injected into presenters)
+
+**Pause/resume for focus mode**:
+```python
+def pause_producer(self, device_path: str) -> None: ...
+def resume_producer(self, device_path: str) -> None: ...
+def pause_all_except(self, device_path: str) -> None: ...
+def resume_all(self) -> None: ...
+```
 
 ### Data Flow
 
@@ -900,43 +908,80 @@ Intrinsic calibration is per-camera (solo checkerboard views). You want a large 
 
 ---
 
-### Planned: MVP Layer Design
+### MVP Architecture (Passive View Pattern)
 
-| Component | Responsibility |
-|-----------|----------------|
-| `CaptureView` | Renders camera tiles, handles Record/Stop clicks |
-| `CapturePresenter` | Owns CaptureSession, converts stats to UI model |
-| `MainWindow` | File menu, project lifecycle |
+**Composition Root**: CaptureCoordinator owns session lifecycle and wires presenters to views.
 
-### Planned: Qt Integration via PipelineBridge
+```
+CaptureCoordinator (composition root for capture subsystem)
+├── CaptureSession (model, long-lived, explicit start/stop)
+├── ActiveSources (runtime device_path ↔ cam_id mapping)
+│
+└── Creates/destroys on view switch:
+    ├── SingleSourcePresenter + FocusView
+    └── MultiSourcePresenter + GridView
+```
 
+**Key Principles:**
+
+1. **Long-lived session** - CaptureSession created once, lives for app lifetime. Switching views doesn't restart capture.
+
+2. **Presenter owns QTimer** - Polls `session.get_latest_frames()` at display rate, converts numpy→QPixmap, emits signals.
+
+3. **Passive views** - Views connect to presenter signals. Presenters never call view methods directly.
+
+4. **Composition root wiring** - All signal/slot connections happen in Coordinator. Presenters and Views never import each other.
+
+**SingleSourcePresenter** (focus mode):
 ```python
-class PipelineBridge(QObject):
-    """Polls queues on QTimer, emits Qt signals."""
+class SingleSourcePresenter(QObject):
+    frame_ready = Signal(QPixmap)
+    stats_updated = Signal(object)
 
-    frames_ready = Signal(dict)         # cam_id -> QPixmap
-    stats_updated = Signal(dict)        # cam_id -> CameraStats
-    alignment_updated = Signal(object)  # AlignmentStats
+    def __init__(self, session: CaptureSession, device_path: str, poll_ms: int = 33): ...
+    def activate(self) -> None:   # Pause other producers, start timer
+    def deactivate(self) -> None: # Resume all, stop timer
+```
 
-    def __init__(
-        self,
-        session: CaptureSession,
-        poll_interval_ms: int = 33,  # ~30fps UI refresh
-    ) -> None: ...
+**MultiSourcePresenter** (grid mode):
+```python
+class MultiSourcePresenter(QObject):
+    frames_ready = Signal(dict)       # cam_id -> QPixmap
+    stats_updated = Signal(dict)      # cam_id -> SourceStats
+    alignment_updated = Signal(object)
+    recording_started = Signal()
+    recording_stopped = Signal(object)  # RecordingResult
 
-    def start(self) -> None: ...
-    def stop(self) -> None: ...
+    def __init__(self, session: CaptureSession, cam_id_lookup: dict[str, int], poll_ms: int = 33): ...
+    def activate(self) -> None:
+    def deactivate(self) -> None:
+    def start_recording(self, output_dir: Path) -> None: ...
+    def stop_recording(self) -> RecordingResult | None: ...
+```
+
+**Coordinator wiring example:**
+```python
+# In CaptureCoordinator.show_focus_view()
+presenter = SingleSourcePresenter(self._session, device_path)
+view = FocusView()
+presenter.frame_ready.connect(view.display_frame)
+presenter.stats_updated.connect(view.update_stats)
+view.back_requested.connect(self._on_back_to_grid)
+presenter.activate()
+return view
 ```
 
 ---
 
 ## Part 5: Camera Profiles and Config (PARTIALLY IMPLEMENTED)
 
-### CameraProfile
+### SourceProfile
 
-**Location**: `src/multiwebcam/profiles/camera_profile.py`
+**Location**: `src/multiwebcam/profiles/profile.py`
 
 **Status**: IMPLEMENTED (needs update for controls dict)
+
+**Naming rationale**: This package captures frames from video devices. "Camera" implies optical properties, calibration, physical location - that's Caliscope's domain. Internally we use "source". Output files use `cam_` prefix (`cam_0.mp4`) because that's Caliscope's expected format.
 
 ```python
 @dataclass(frozen=True)
@@ -948,10 +993,10 @@ class ControlValue:
 
 
 @dataclass(frozen=True)
-class CameraProfile:
-    cam_id: int                     # Stable identifier (0, 1, 2, ...)
+class SourceProfile:
+    source_id: int                  # Stable identifier (maps to Caliscope's camera_id)
     bus_info: str                   # Stable USB identifier for matching
-    label: str                      # User-assigned label (defaults to "cam_N")
+    label: str                      # User-assigned label (defaults to "source_N")
     ignore: bool = False            # If True, excluded from recording
     resolution: tuple[int, int] = (1280, 720)
     pixel_format: str = "mjpeg"
@@ -960,10 +1005,10 @@ class CameraProfile:
 ```
 
 **Key fields:**
-- `cam_id`: Stable integer, assigned when camera first added to project
-- `label`: Human-readable name, defaults to `cam_N`, user can change
-- `bus_info`: USB topology identifier, used to match cameras on reload
-- `ignore`: If True, camera appears greyed out and is excluded from recording
+- `source_id`: Stable integer, assigned when source first added to project. Maps 1:1 to Caliscope's `camera_id`.
+- `label`: Human-readable name, defaults to `source_N`, user can change
+- `bus_info`: USB topology identifier, used to match sources on reload
+- `ignore`: If True, source appears greyed out and is excluded from recording
 - `controls`: Dict of V4L2 control name -> ControlValue (value + min/max range)
 
 **Why controls dict instead of hardcoded fields?**
@@ -991,11 +1036,11 @@ class ProfileRepository:
 
 ### Project Config (multiwebcam.toml)
 
-Compact inline format - each camera is a self-contained block:
+Compact inline format - each source is a self-contained block:
 
 ```toml
-[[cameras]]
-cam_id = 0
+[[sources]]
+source_id = 0
 label = "front_left"
 bus_info = "usb-0000:00:14.0-3.1"
 ignore = false
@@ -1006,8 +1051,8 @@ controls.brightness = { value = 128, min = 0, max = 255 }
 controls.exposure_time_absolute = { value = 150, min = 2, max = 1250 }
 controls.gain = { value = 32, min = 0, max = 100 }
 
-[[cameras]]
-cam_id = 1
+[[sources]]
+source_id = 1
 label = "overhead"
 bus_info = "usb-0000:00:14.0-3.2"
 ignore = false
@@ -1018,8 +1063,8 @@ controls.brightness = { value = 100, min = 0, max = 255 }
 controls.exposure_time_absolute = { value = 200, min = 3, max = 2047 }
 controls.gain = { value = 40, min = 0, max = 255 }
 
-[[cameras]]
-cam_id = 2
+[[sources]]
+source_id = 2
 label = "side"
 bus_info = "usb-0000:00:14.0-4"
 ignore = true
@@ -1171,16 +1216,22 @@ src/multiwebcam/
 |
 +-- profiles/               # [IMPLEMENTED - needs controls update]
 |   +-- __init__.py
-|   +-- camera_profile.py   # CameraProfile, ControlValue dataclasses
+|   +-- profile.py          # SourceProfile, ControlValue dataclasses
 |   +-- repository.py       # ProfileRepository
 |
 +-- ui/                     # [NOT IMPLEMENTED]
     +-- __init__.py
-    +-- main_window.py      # MainWindow
-    +-- presenter.py        # CapturePresenter
-    +-- camera_tile.py      # CameraTileWidget
-    +-- controls.py         # V4L2 control widgets
-    +-- bridge.py           # PipelineBridge (Qt integration)
+    +-- conversion.py       # frame_to_pixmap() utility
+    +-- coordinator.py      # CaptureCoordinator (composition root)
+    +-- presenters/
+    |   +-- __init__.py
+    |   +-- single_source.py  # SingleSourcePresenter (focus mode)
+    |   +-- multi_source.py   # MultiSourcePresenter (grid mode)
+    +-- views/
+        +-- __init__.py
+        +-- grid_view.py      # GridView with SourceTile widgets
+        +-- focus_view.py     # FocusView (large preview + stats)
+        +-- source_tile.py    # Single source display widget
 ```
 
 ---
