@@ -127,3 +127,69 @@ class CaptureCoordinator(QObject):
         """Get device_path for a source_id, or None if not connected."""
         info = self._sources.get(source_id)
         return info.device_path if info and not info.error else None
+
+    def create_grid_view(self, parent=None):
+        """Create grid view and presenter, wire them together.
+
+        Returns:
+            tuple[GridView, MultiSourcePresenter]: View and its presenter
+        """
+        from multiwebcam.ui.presenters import MultiSourcePresenter
+        from multiwebcam.ui.views import GridView
+
+        view = GridView(parent)
+        presenter = MultiSourcePresenter(
+            self._session,
+            self.get_source_id_lookup(),
+        )
+
+        # Add tiles for all sources
+        for source_id, info in self._sources.items():
+            view.add_source(source_id, info.profile.label)
+
+        # Wire presenter signals to view
+        presenter.frames_ready.connect(view.display_frames)
+        presenter.stats_updated.connect(view.update_stats)
+        presenter.alignment_updated.connect(view.update_alignment)
+        presenter.recording_started.connect(lambda: view.set_recording(True))
+        presenter.recording_stopped.connect(lambda: view.set_recording(False))
+
+        # Wire view actions to presenter
+        view.record_requested.connect(
+            lambda: presenter.start_recording(self._project_path / "recordings")
+        )
+        view.stop_requested.connect(presenter.stop_recording)
+
+        return view, presenter
+
+    def create_focus_view(self, source_id: int, parent=None):
+        """Create focus view and presenter for a specific source.
+
+        Args:
+            source_id: ID of source to focus on
+
+        Returns:
+            tuple[FocusView, SingleSourcePresenter]: View and its presenter.
+            Caller must connect view.back_requested to their navigation logic.
+
+        Raises:
+            ValueError: If source is not available or has an error
+        """
+        from multiwebcam.ui.presenters import SingleSourcePresenter
+        from multiwebcam.ui.views import FocusView
+
+        info = self._sources.get(source_id)
+        if not info or info.error:
+            raise ValueError(f"Source {source_id} not available")
+
+        view = FocusView(source_id, info.profile.label, parent)
+        presenter = SingleSourcePresenter(
+            self._session,
+            info.device_path,
+        )
+
+        # Wire presenter signals to view
+        presenter.frame_ready.connect(view.display_frame)
+        presenter.stats_updated.connect(view.update_stats)
+
+        return view, presenter

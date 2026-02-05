@@ -6,7 +6,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication
 
 from multiwebcam.profiles import SourceProfile
-from multiwebcam.ui import CaptureCoordinator, SourceInfo, frame_to_pixmap
+from multiwebcam.ui import CaptureCoordinator, FocusView, GridView, SourceInfo, SourceTile, frame_to_pixmap
 from multiwebcam.ui.presenters import MultiSourcePresenter, SingleSourcePresenter
 
 
@@ -85,3 +85,40 @@ def test_capture_coordinator_initialize(tmp_path):
         assert coordinator.session is not None
     else:
         assert coordinator.session is None
+
+
+def test_source_tile_construction(qapp):
+    """SourceTile can be constructed with source_id and label."""
+    tile = SourceTile(source_id=0, label="Test Camera")
+
+    assert tile.source_id == 0
+    # Tile has expected child widgets
+    assert tile._frame_label is not None
+    assert tile._name_label.text() == "Test Camera"
+    assert tile._focus_btn is not None
+
+
+def test_grid_view_construction(qapp):
+    """GridView can be constructed and add sources."""
+    view = GridView()
+
+    # Initially empty
+    assert len(view._tiles) == 0
+
+    # Can add sources
+    view.add_source(0, "Camera 0")
+    view.add_source(1, "Camera 1")
+
+    assert len(view._tiles) == 2
+    assert 0 in view._tiles
+    assert 1 in view._tiles
+
+
+def test_focus_view_construction(qapp):
+    """FocusView can be constructed with source_id and label."""
+    view = FocusView(source_id=0, label="Test Camera")
+
+    assert view.source_id == 0
+    assert "Test Camera" in view._info_label.text()
+    assert view._frame_label is not None
+    assert view._back_btn is not None
