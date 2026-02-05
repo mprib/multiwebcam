@@ -8,8 +8,9 @@ from pathlib import Path
 from PySide6.QtCore import QObject
 
 from multiwebcam.pipeline.session import CaptureSession
-from multiwebcam.profiles import ProfileRepository, SourceProfile
+from multiwebcam.profiles import ControlValue, ProfileRepository, SourceProfile
 from multiwebcam.sources import FrameSource, FrameSourceConfig, FrameSourceOptions, discover_frame_sources
+from multiwebcam.sources.controls import set_control
 
 
 @dataclass
@@ -100,6 +101,7 @@ class CaptureCoordinator(QObject):
     def start(self) -> None:
         """Start the capture session."""
         if self._session:
+            self._apply_saved_controls()
             self._session.start()
 
     def stop(self) -> None:
@@ -129,6 +131,19 @@ class CaptureCoordinator(QObject):
         """Get device_path for a source_id, or None if not connected."""
         info = self._sources.get(source_id)
         return info.device_path if info and not info.error else None
+
+    def _apply_saved_controls(self) -> None:
+        """Apply saved V4L2 controls from profiles before capture starts.
+
+        This ensures settings like focus_auto=0 are applied before the stream opens,
+        which is critical for cameras like the Razer Kiyo Pro where autofocus
+        must be disabled before recording.
+        """
+        for info in self._sources.values():
+            if not info.device_path or info.error:
+                continue
+            for name, cv in info.profile.controls.items():
+                set_control(info.device_path, name, cv.value)
 
     def create_grid_view(self, parent=None):
         """Create grid view and presenter, wire them together.
@@ -222,14 +237,52 @@ class CaptureCoordinator(QObject):
             lambda: self._on_apply_config(presenter, view)
         )
 
-        # Set current config in view
-        w, h = config.resolution
-        view.set_current_config(
-            resolution=f"{w}x{h}",
-            framerate=str(config.fps),
+        # Set current config in view AFTER combos are populated
+        presenter.initial_config_ready.connect(view.set_current_config)
+
+        # Wire V4L2 controls
+        presenter.controls_ready.connect(view.set_controls)
+
+        # Control changes flow: view panel -> presenter -> device + persist
+        # We wire this lazily since the control panel doesn't exist until controls_ready fires
+        def _wire_control_panel(controls) -> None:
+            if view.control_panel is not None:
+                view.control_panel.control_changed.connect(presenter.on_control_changed)
+
+        presenter.controls_ready.connect(_wire_control_panel)
+
+        # Persist control changes to profile
+        presenter.control_persist_requested.connect(
+            lambda name, value: self._on_control_persist(source_id, name, value)
         )
 
         return view, presenter
+
+    def _on_control_persist(self, source_id: int, name: str, value: int) -> None:
+        """Persist a control value change to the source profile."""
+        info = self._sources.get(source_id)
+        if not info:
+            return
+
+        # We need min/max for ControlValue — query current controls to get them
+        from multiwebcam.sources.controls import query_controls
+
+        controls = query_controls(info.device_path)
+        ctrl = next((c for c in controls if c.name == name), None)
+        if ctrl is None:
+            return
+
+        # Bool controls report min/max as None — default to 0/1
+        ctrl_min = ctrl.min if ctrl.min is not None else 0
+        ctrl_max = ctrl.max if ctrl.max is not None else 1
+        control_value = ControlValue(
+            value=value,
+            min=ctrl_min,
+            max=ctrl_max,
+        )
+        updated_profile = info.profile.with_control(name, control_value)
+        self._repo.save(updated_profile)
+        info.profile = updated_profile
 
     def _on_apply_config(self, presenter, view) -> None:
         """Handle Apply button click - change source configuration."""

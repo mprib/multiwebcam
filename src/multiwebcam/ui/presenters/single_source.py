@@ -5,6 +5,7 @@ from PySide6.QtGui import QPixmap
 
 from multiwebcam.pipeline.session import CaptureSession
 from multiwebcam.sources.config import FrameSourceConfig
+from multiwebcam.sources.controls import query_controls, set_control
 from multiwebcam.sources.discovery import FrameSourceOptions
 from multiwebcam.ui.conversion import frame_to_pixmap
 
@@ -30,6 +31,11 @@ class SingleSourcePresenter(QObject):
     config_error = Signal(str)             # Error message
     resolutions_available = Signal(object)  # list[str] of "WxH" strings
     framerates_available = Signal(object)   # list[str] of fps strings
+    initial_config_ready = Signal(str, str)  # (resolution_str, fps_str) after combos populated
+
+    # V4L2 control signals
+    controls_ready = Signal(object)           # list[V4L2Control]
+    control_persist_requested = Signal(str, int)  # (control_name, value) for coordinator to persist
 
     def __init__(
         self,
@@ -61,6 +67,8 @@ class SingleSourcePresenter(QObject):
         # Emit initial resolution/framerate options if available
         if self._source_options is not None:
             self._emit_initial_capabilities()
+
+        self._emit_controls()
 
     def deactivate(self) -> None:
         """Stop presenting - resumes all sources, stops polling."""
@@ -111,6 +119,12 @@ class SingleSourcePresenter(QObject):
         fps_strings = [str(int(f)) for f in fps_list]
         self.framerates_available.emit(fps_strings)
 
+        # Emit current config AFTER combos are populated so view can select correctly
+        self.initial_config_ready.emit(
+            f"{w}x{h}",
+            str(self._current_config.fps),
+        )
+
     def on_resolution_selected(self, resolution_str: str) -> None:
         """Handle resolution combo change - cascade to framerate options."""
         if (
@@ -135,3 +149,14 @@ class SingleSourcePresenter(QObject):
     def apply_config_error(self, error: str) -> None:
         """Called when config change fails."""
         self.config_error.emit(error)
+
+    def _emit_controls(self) -> None:
+        """Query V4L2 controls for this device and emit them."""
+        controls = query_controls(self._device_path)
+        if controls:
+            self.controls_ready.emit(controls)
+
+    def on_control_changed(self, name: str, value: int) -> None:
+        """Handle control change from UI — apply to device and request persistence."""
+        if set_control(self._device_path, name, value):
+            self.control_persist_requested.emit(name, value)

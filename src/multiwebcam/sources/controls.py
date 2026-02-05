@@ -121,14 +121,18 @@ def query_controls(device: str) -> list[V4L2Control]:
         device: V4L2 device path (e.g., "/dev/video0")
 
     Returns:
-        List of V4L2Control objects (empty list if query fails)
+        List of V4L2Control objects (empty list if query fails or times out)
     """
-    result = subprocess.run(
-        ["v4l2-ctl", "-d", device, "--list-ctrls-menus"],
-        capture_output=True,
-        text=True,
-        timeout=5,
-    )
+    try:
+        result = subprocess.run(
+            ["v4l2-ctl", "-d", device, "--list-ctrls-menus"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning(f"{device}: v4l2-ctl query timed out")
+        return []
 
     if result.returncode != 0:
         logger.debug(f"v4l2-ctl failed for {device}: {result.stderr.strip()}")
@@ -146,14 +150,18 @@ def set_control(device: str, control_name: str, value: int) -> bool:
         value: Integer value to set
 
     Returns:
-        True if successful, False otherwise
+        True if successful, False on failure or timeout
     """
-    result = subprocess.run(
-        ["v4l2-ctl", "-d", device, "--set-ctrl", f"{control_name}={value}"],
-        capture_output=True,
-        text=True,
-        timeout=5,
-    )
+    try:
+        result = subprocess.run(
+            ["v4l2-ctl", "-d", device, "--set-ctrl", f"{control_name}={value}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning(f"{device}: timed out setting {control_name}={value}")
+        return False
 
     return result.returncode == 0
 
@@ -166,14 +174,18 @@ def get_control_value(device: str, control_name: str) -> int | None:
         control_name: Name of control (e.g., "brightness")
 
     Returns:
-        Current value, or None if query fails
+        Current value, or None if query fails or times out
     """
-    result = subprocess.run(
-        ["v4l2-ctl", "-d", device, "--get-ctrl", control_name],
-        capture_output=True,
-        text=True,
-        timeout=5,
-    )
+    try:
+        result = subprocess.run(
+            ["v4l2-ctl", "-d", device, "--get-ctrl", control_name],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning(f"{device}: timed out getting {control_name}")
+        return None
 
     if result.returncode == 0:
         match = re.search(r":\s*(-?\d+)", result.stdout)

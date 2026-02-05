@@ -1,11 +1,14 @@
 """Main application window with view switching."""
 
+import logging
 from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMainWindow, QStackedWidget
 
 from multiwebcam.ui.coordinator import CaptureCoordinator
+
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -62,7 +65,10 @@ class MainWindow(QMainWindow):
 
     def _on_focus_requested(self, source_id: int) -> None:
         """Handle focus request from grid view."""
-        self._show_focus_view(source_id)
+        try:
+            self._show_focus_view(source_id)
+        except ValueError as e:
+            logger.warning(f"Cannot focus source {source_id}: {e}")
 
     def _cleanup_current(self) -> None:
         """Deactivate current presenter and remove old views from stack."""

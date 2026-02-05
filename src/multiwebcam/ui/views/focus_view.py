@@ -13,7 +13,9 @@ from PySide6.QtWidgets import (
 )
 
 from multiwebcam.pipeline.report import CameraStats
+from multiwebcam.sources.controls import V4L2Control
 from multiwebcam.ui.views.aspect_ratio_label import AspectRatioLabel
+from multiwebcam.ui.views.control_panel import ControlPanel
 
 
 class FocusView(QWidget):
@@ -35,6 +37,7 @@ class FocusView(QWidget):
     def __init__(self, source_id: int, label: str, parent=None):
         super().__init__(parent)
         self._source_id = source_id
+        self._control_panel: ControlPanel | None = None
 
         # Main horizontal layout: video on left, settings panel on right
         main_layout = QHBoxLayout(self)
@@ -45,19 +48,19 @@ class FocusView(QWidget):
         main_layout.addWidget(self._frame_label, stretch=3)
 
         # Right: Settings panel (25% width)
-        panel_layout = QVBoxLayout()
-        main_layout.addLayout(panel_layout, stretch=1)
+        self._panel_layout = QVBoxLayout()
+        main_layout.addLayout(self._panel_layout, stretch=1)
 
         # Configuration section header
         config_header = QLabel("Configuration")
         config_header_font = QFont()
         config_header_font.setBold(True)
         config_header.setFont(config_header_font)
-        panel_layout.addWidget(config_header)
+        self._panel_layout.addWidget(config_header)
 
         # Configuration controls using QFormLayout
         config_form = QFormLayout()
-        panel_layout.addLayout(config_form)
+        self._panel_layout.addLayout(config_form)
 
         self._resolution_combo = QComboBox()
         config_form.addRow("Resolution:", self._resolution_combo)
@@ -67,25 +70,25 @@ class FocusView(QWidget):
 
         # Apply button
         self._apply_btn = QPushButton("Apply")
-        panel_layout.addWidget(self._apply_btn)
+        self._panel_layout.addWidget(self._apply_btn)
 
         # Separator spacing
-        panel_layout.addSpacing(20)
+        self._panel_layout.addSpacing(20)
 
         # Source info label
         self._info_label = QLabel(f"{label} (source {source_id})")
-        panel_layout.addWidget(self._info_label)
+        self._panel_layout.addWidget(self._info_label)
 
         # Stats label
         self._stats_label = QLabel("-- fps | -- jitter")
-        panel_layout.addWidget(self._stats_label)
+        self._panel_layout.addWidget(self._stats_label)
 
         # Push back button to bottom
-        panel_layout.addStretch()
+        self._panel_layout.addStretch()
 
         # Back button
         self._back_btn = QPushButton("Back to Grid")
-        panel_layout.addWidget(self._back_btn)
+        self._panel_layout.addWidget(self._back_btn)
 
         # Wire up signals
         self._resolution_combo.currentTextChanged.connect(self.resolution_selected.emit)
@@ -149,3 +152,24 @@ class FocusView(QWidget):
         """Return currently selected framerate."""
         text = self._framerate_combo.currentText()
         return int(text) if text else 0
+
+    def set_controls(self, controls: list[V4L2Control]) -> None:
+        """Create and embed the control panel in the side panel.
+
+        Inserts below the config section, above info/stats labels.
+        Replaces any existing control panel.
+        """
+        # Remove existing panel if any
+        if self._control_panel is not None:
+            self._panel_layout.removeWidget(self._control_panel)
+            self._control_panel.deleteLater()
+
+        self._control_panel = ControlPanel(controls, self)
+        # Insert before the info label
+        idx = self._panel_layout.indexOf(self._info_label)
+        self._panel_layout.insertWidget(idx, self._control_panel)
+
+    @property
+    def control_panel(self) -> ControlPanel | None:
+        """The embedded control panel, or None if not yet created."""
+        return self._control_panel

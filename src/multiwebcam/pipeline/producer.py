@@ -147,40 +147,73 @@ class FrameProducer:
 
     def _run(self) -> None:
         """Producer thread main loop."""
+        max_restarts = 3
+        restarts = 0
+
         try:
             self.source.start()
+        except Exception as e:
+            logger.error(f"Failed to start source {self.device_path}: {e}")
+            return
 
-            for packet in self.source:
-                # Block if paused
-                self._resume_event.wait()
+        while not self._shutdown_event.is_set():
+            try:
+                for packet in self.source:
+                    # Block if paused
+                    self._resume_event.wait()
 
-                # Check shutdown after resume to avoid processing one more frame
+                    # Check shutdown after resume to avoid processing one more frame
+                    if self._shutdown_event.is_set():
+                        return
+
+                    # Make frame array read-only to enforce immutability
+                    packet.frame.flags.writeable = False
+
+                    self._frames_captured += 1
+
+                    # Display queue: drop-oldest (always get latest)
+                    try:
+                        self.queues.display.get_nowait()
+                    except Empty:
+                        pass
+                    self.queues.display.put_nowait(packet)
+
+                    # Alignment queue: always push (for monitoring)
+                    self.queues.alignment.put(packet)
+
+                    # Recording queue: conditional on is_recording flag
+                    if self.is_recording.is_set():
+                        self.queues.recording.put(packet)
+
+                # Iterator exhausted normally
+                break
+
+            except Exception as e:
                 if self._shutdown_event.is_set():
                     break
 
-                # Make frame array read-only to enforce immutability
-                packet.frame.flags.writeable = False
+                restarts += 1
+                if restarts > max_restarts:
+                    logger.error(
+                        f"Producer {self.device_path} exceeded {max_restarts} "
+                        f"restarts, giving up: {e}"
+                    )
+                    break
 
-                self._frames_captured += 1
-
-                # Display queue: drop-oldest (always get latest)
+                # Transient decode errors happen when V4L2 controls change
+                # mid-stream (e.g. switching exposure mode). Restart the
+                # source and resume capturing.
+                logger.warning(
+                    f"Decode error on {self.device_path} ({restarts}/{max_restarts}), "
+                    f"restarting source: {e}"
+                )
                 try:
-                    self.queues.display.get_nowait()
-                except Empty:
-                    pass
-                self.queues.display.put_nowait(packet)
+                    self.source.stop()
+                    self.source.start()
+                except Exception as restart_err:
+                    logger.error(
+                        f"Failed to restart source {self.device_path}: {restart_err}"
+                    )
+                    break
 
-                # Alignment queue: always push (for monitoring)
-                self.queues.alignment.put(packet)
-
-                # Recording queue: conditional on is_recording flag
-                if self.is_recording.is_set():
-                    self.queues.recording.put(packet)
-
-        except Exception as e:
-            # Normal during shutdown when container is closed
-            if not self._shutdown_event.is_set():
-                logger.error(f"Producer error on {self.device_path}: {e}", exc_info=True)
-        finally:
-            # Don't call source.stop() here - it's called from stop()
-            logger.debug(f"Producer thread exiting for {self.device_path}")
+        logger.debug(f"Producer thread exiting for {self.device_path}")
