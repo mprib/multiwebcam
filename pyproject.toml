@@ -21,7 +21,8 @@ dependencies = [
 repository = "https://github.com/mprib/multiwebcam"
 
 [project.scripts]
-mwc = "multiwebcam.__main__:CLI_parser"
+multiwebcam = "multiwebcam.__main__:main"
+mwc = "multiwebcam.__main__:main"
 
 [build-system]
 requires = ["hatchling"]

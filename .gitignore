@@ -14,11 +14,14 @@ CLAUDE.md
 
 # Test artifacts
 tests/tmp/
-
-# Keep exploration scripts, ignore ad-hoc scripts
-scripts/*.py
-!scripts/test_recording.py
-!scripts/test_profiles.py
-!scripts/check_profiles_import.py
-!scripts/pyav_exploration/tmp/
 tmp/
+
+# Widget visualization output (screenshots)
+scripts/widget_visualization/output/
+
+# Test project directories (created by scripts)
+scripts/test_project/
+scripts/widget_visualization/output/test_project/
+
+# PyAV exploration temp files
+scripts/pyav_exploration/tmp/

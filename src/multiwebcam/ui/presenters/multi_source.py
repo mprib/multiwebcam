@@ -16,8 +16,9 @@ class MultiSourcePresenter(QObject):
     Handles recording start/stop and emits batched frame updates.
     """
 
-    frames_ready = Signal(dict)  # source_id -> QPixmap
-    stats_updated = Signal(dict)  # source_id -> CameraStats
+    # Use 'object' for complex Python types - Qt can't serialize dicts directly
+    frames_ready = Signal(object)  # dict[int, QPixmap]: source_id -> QPixmap
+    stats_updated = Signal(object)  # dict[int, CameraStats]: source_id -> CameraStats
     alignment_updated = Signal(object)  # AlignmentStats
     recording_started = Signal()
     recording_stopped = Signal(object)  # RecordingResult
