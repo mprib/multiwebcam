@@ -12,6 +12,7 @@ from multiwebcam.pipeline.alignment import AlignmentMonitor, AlignmentStats
 from multiwebcam.pipeline.producer import FrameProducer, ProducerQueues
 from multiwebcam.pipeline.report import CameraStats
 from multiwebcam.recording.recorder import FrameRecorder, RecordingResult
+from multiwebcam.sources.config import FrameSourceConfig, FrameSourceStatus
 from multiwebcam.sources.device import FrameSource
 from multiwebcam.sources.frame_packet import FramePacket
 
@@ -211,6 +212,75 @@ class CaptureSession:
         """Resume all producers."""
         for producer in self._producers.values():
             producer.resume()
+
+    def replace_source(self, device_path: str, new_config: FrameSourceConfig) -> FrameSourceStatus:
+        """
+        Replace a running camera source with a new configuration.
+
+        Stops the old producer, creates a new FrameSource with new_config,
+        and starts a new producer using the same queues. This allows changing
+        camera settings (e.g., resolution, fps) without tearing down the entire session.
+
+        Args:
+            device_path: The device path to replace (e.g., '/dev/video0')
+            new_config: New configuration for the frame source
+
+        Returns:
+            FrameSourceStatus from starting the new source
+
+        Raises:
+            CaptureSessionError: If session not running, recording active,
+                               or device_path not found
+        """
+        # Guards
+        if not self._running:
+            raise CaptureSessionError("Session not started")
+
+        if self._is_recording.is_set():
+            raise CaptureSessionError("Cannot change source config while recording")
+
+        if device_path not in self._producers:
+            raise CaptureSessionError(f"No producer found for device path: {device_path}")
+
+        logger.info(f"Replacing source {device_path} with new config: {new_config}")
+
+        # Stop old producer
+        old_producer = self._producers[device_path]
+        old_producer.stop()
+
+        # Drain stale display frame
+        queues = self._producer_queues[device_path]
+        try:
+            queues.display.get_nowait()
+        except Empty:
+            pass
+
+        # Create and start new source
+        new_source = FrameSource(device_path, new_config)
+        status = new_source.start()
+
+        # Create new producer with existing queues
+        new_producer = FrameProducer(
+            new_source,
+            queues=queues,
+            is_recording=self._is_recording,
+        )
+
+        # Replace producer
+        self._producers[device_path] = new_producer
+
+        # Update sources list - replace old source with new one
+        for i, source in enumerate(self.sources):
+            if source.device_path == device_path:
+                self.sources[i] = new_source
+                break
+
+        # Start new producer
+        new_producer.start()
+
+        logger.info(f"Source {device_path} replaced successfully")
+
+        return status
 
     def get_latest_frames(self) -> dict[str, FramePacket | None]:
         """

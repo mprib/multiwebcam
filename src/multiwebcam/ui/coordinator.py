@@ -1,5 +1,7 @@
 """Capture subsystem coordinator (composition root)."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -134,6 +136,9 @@ class CaptureCoordinator(QObject):
         Returns:
             tuple[GridView, MultiSourcePresenter]: View and its presenter
         """
+        if self._session is None:
+            raise RuntimeError("Cannot create grid view: no capture session")
+
         from multiwebcam.ui.presenters import MultiSourcePresenter
         from multiwebcam.ui.views import GridView
 
@@ -175,6 +180,9 @@ class CaptureCoordinator(QObject):
         Raises:
             ValueError: If source is not available or has an error
         """
+        if self._session is None:
+            raise RuntimeError("Cannot create focus view: no capture session")
+
         from multiwebcam.ui.presenters import SingleSourcePresenter
         from multiwebcam.ui.views import FocusView
 
@@ -183,13 +191,87 @@ class CaptureCoordinator(QObject):
             raise ValueError(f"Source {source_id} not available")
 
         view = FocusView(source_id, info.profile.label, parent)
+
+        # Build current config from profile
+        config = FrameSourceConfig(
+            resolution=info.profile.resolution,
+            fps=info.profile.capture_fps,
+            pixel_format=info.profile.pixel_format,
+        )
+
         presenter = SingleSourcePresenter(
             self._session,
             info.device_path,
+            source_options=info.options,
+            current_config=config,
         )
 
         # Wire presenter signals to view
         presenter.frame_ready.connect(view.display_frame)
         presenter.stats_updated.connect(view.update_stats)
 
+        # Wire resolution/framerate populate signals
+        presenter.resolutions_available.connect(view.populate_resolutions)
+        presenter.framerates_available.connect(view.populate_framerates)
+
+        # Wire view combo change to presenter cascade
+        view.resolution_selected.connect(presenter.on_resolution_selected)
+
+        # Wire Apply button through coordinator
+        view.apply_requested.connect(
+            lambda: self._on_apply_config(presenter, view)
+        )
+
+        # Set current config in view
+        w, h = config.resolution
+        view.set_current_config(
+            resolution=f"{w}x{h}",
+            framerate=str(config.fps),
+        )
+
         return view, presenter
+
+    def _on_apply_config(self, presenter, view) -> None:
+        """Handle Apply button click - change source configuration."""
+        # Read current selections from view (format always mjpeg)
+        resolution = view.selected_resolution
+        framerate = view.selected_framerate
+
+        if resolution == (0, 0) or framerate == 0:
+            presenter.apply_config_error("Invalid configuration selected")
+            return
+
+        new_config = FrameSourceConfig(
+            resolution=resolution,
+            fps=framerate,
+            pixel_format="mjpeg",
+        )
+
+        device_path = presenter.device_path
+
+        if self._session is None:
+            presenter.apply_config_error("No capture session active")
+            return
+
+        try:
+            self._session.replace_source(device_path, new_config)
+        except Exception as e:
+            presenter.apply_config_error(str(e))
+            return
+
+        # Update profile
+        source_id = self.get_source_id_lookup().get(device_path)
+        if source_id is not None:
+            info = self._sources.get(source_id)
+            if info:
+                updated_profile = info.profile.with_updates(
+                    resolution=resolution,
+                    capture_fps=framerate,
+                    pixel_format="mjpeg",
+                )
+                self._repo.save(updated_profile)
+                info.profile = updated_profile
+
+        # Notify presenter of success
+        presenter.apply_config_result(new_config)
+

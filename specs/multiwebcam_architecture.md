@@ -261,9 +261,12 @@ class CaptureSession:
     def get_camera_stats(self) -> dict[str, CameraStats] | None: ...
     def get_alignment_stats(self) -> AlignmentStats | None: ...
 
-    # Recording (TODO: FrameRecorder implementation)
+    # Recording
     def start_recording(self, output_dir: Path) -> None: ...
-    def stop_recording(self) -> None: ...
+    def stop_recording(self) -> RecordingResult | None: ...
+
+    # Source replacement (config change without session restart)
+    def replace_source(self, device_path: str, new_config: FrameSourceConfig) -> FrameSourceStatus: ...
 
     @property
     def is_recording(self) -> bool: ...
@@ -286,6 +289,12 @@ def resume_producer(self, device_path: str) -> None: ...
 def pause_all_except(self, device_path: str) -> None: ...
 def resume_all(self) -> None: ...
 ```
+
+**Source replacement** (config change without session restart):
+```python
+def replace_source(self, device_path: str, new_config: FrameSourceConfig) -> FrameSourceStatus: ...
+```
+Stops old producer, creates new FrameSource + FrameProducer with same queues. Blocked during recording (would corrupt MP4 encoder). Used by focus mode when user applies new resolution/format/fps.
 
 ### Data Flow
 
@@ -864,40 +873,43 @@ The main view showing all cameras simultaneously.
 
 ### Focus Mode (Single Camera)
 
-Enter by clicking [F] on any camera tile. Large preview for framing and settings adjustment.
+Enter by clicking [F] on any camera tile. Side-panel layout: large video on the left, configuration controls on the right.
 
 ```
 +---------------------------------------------------------------------+
 | multiwebcam                                        [Settings] [?]    |
 +---------------------------------------------------------------------+
-| File                                                                 |
-+---------------------------------------------------------------------+
-|  +---------------------------------------------------------------+  |
-|  |                                                               |  |
-|  |                                                               |  |
-|  |                    front_left (focused)                       |  |
-|  |                    cam_id: 0 | /dev/video0                    |  |
-|  |                    29.8 fps | jitter: 2.1ms                   |  |
-|  |                                                               |  |
-|  |                                                               |  |
-|  +---------------------------------------------------------------+  |
-|                                                                      |
-|  Resolution: [v 1280x720]   Format: [v MJPEG]   FPS: [v 30]         |
-|                                                                      |
-|  Exposure:       [----*------] 150                                  |
-|  Gain:           [--*--------] 32                                   |
-|  White Balance:  [---*-------] 4500                                 |
-|  Focus:          [------*----] 75                                   |
-|                                                                      |
-|  [Record Intrinsic]                            [Back to Grid]       |
+|  +----------------------------------------------+ +----------------+|
+|  |                                              | | Configuration  ||
+|  |                                              | |                ||
+|  |            front_left (focused)              | | Format: [mjpeg]||
+|  |                                              | | Res:  [1280x720]|
+|  |            (AspectRatioLabel -                | | FPS:     [30]  ||
+|  |             letterbox/pillarbox)              | |                ||
+|  |                                              | | [  Apply  ]    ||
+|  |                                              | |                ||
+|  +----------------------------------------------+ | front_left     ||
+|                                                    | (source 0)     ||
+|                                                    | 29.8fps|2.1ms  ||
+|                                                    |                ||
+|                                                    | [Back to Grid] ||
+|                                                    +----------------+|
 +---------------------------------------------------------------------+
 ```
 
 **Focus mode features:**
-- Large preview for precise framing
-- Resolution/format/FPS dropdowns (changes require camera restart)
-- V4L2 control sliders (exposure, gain, white balance, focus)
-- All settings save to TOML immediately when changed
+- Large preview (75% width) with aspect-ratio-preserving display
+- Configuration side panel (25% width) with format/resolution/FPS dropdowns
+- Apply button commits changes (stops old producer, restarts with new config)
+- Resolution changes are blocked during recording (would corrupt MP4 encoder)
+- V4L2 control sliders (exposure, gain, white balance, focus) - planned
+- All settings save to TOML immediately when applied
+
+**Config change flow:**
+1. User selects format → cascades to available resolutions
+2. User selects resolution → cascades to available framerates
+3. User clicks Apply → CaptureSession.replace_source() swaps the producer
+4. Profile updated and saved to TOML
 
 **Actions from focus mode:**
 - Record Intrinsic -> `calibration/intrinsic/cam_<id>.mp4` (no frametimes.csv)

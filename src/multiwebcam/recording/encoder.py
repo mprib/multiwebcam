@@ -203,6 +203,7 @@ class CameraEncoder:
 
         container = av.open(str(self.output_path), mode="w")
         stream = container.add_stream(self.codec, rate=30)  # Assume 30fps for now
+        assert isinstance(stream, VideoStream), "Expected VideoStream for video encoding"
         stream.width = width
         stream.height = height
         stream.pix_fmt = "yuv420p"
