@@ -2,7 +2,7 @@
 
 import pytest
 
-from multiwebcam.profiles.camera_profile import CameraProfile, ControlValue
+from multiwebcam.profiles.profile import ControlValue, SourceProfile
 from multiwebcam.profiles.repository import ProfileParseError, ProfileRepository
 
 
@@ -15,7 +15,7 @@ def test_load_empty_project(tmp_path):
 def test_save_and_load_single_profile(tmp_path):
     """Profile round-trips through TOML correctly."""
     repo = ProfileRepository(tmp_path)
-    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-0000:00:14.0-1")
+    profile = SourceProfile.with_defaults(source_id=0, bus_info="usb-0000:00:14.0-1")
 
     repo.save(profile)
     loaded = repo.load_all()
@@ -25,9 +25,9 @@ def test_save_and_load_single_profile(tmp_path):
 
 
 def test_save_updates_existing_profile(tmp_path):
-    """Saving profile with same cam_id replaces it."""
+    """Saving profile with same source_id replaces it."""
     repo = ProfileRepository(tmp_path)
-    profile1 = CameraProfile.with_defaults(cam_id=0, bus_info="usb-1")
+    profile1 = SourceProfile.with_defaults(source_id=0, bus_info="usb-1")
     profile2 = profile1.with_label("updated_label")
 
     repo.save(profile1)
@@ -41,22 +41,22 @@ def test_save_updates_existing_profile(tmp_path):
 def test_save_multiple_profiles(tmp_path):
     """Can save multiple profiles."""
     repo = ProfileRepository(tmp_path)
-    profile0 = CameraProfile.with_defaults(cam_id=0, bus_info="usb-1")
-    profile1 = CameraProfile.with_defaults(cam_id=1, bus_info="usb-2")
+    profile0 = SourceProfile.with_defaults(source_id=0, bus_info="usb-1")
+    profile1 = SourceProfile.with_defaults(source_id=1, bus_info="usb-2")
 
     repo.save(profile0)
     repo.save(profile1)
     loaded = repo.load_all()
 
     assert len(loaded) == 2
-    assert loaded[0].cam_id == 0
-    assert loaded[1].cam_id == 1
+    assert loaded[0].source_id == 0
+    assert loaded[1].source_id == 1
 
 
 def test_get_by_bus_info(tmp_path):
     """Can retrieve profile by bus_info."""
     repo = ProfileRepository(tmp_path)
-    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-0000:00:14.0-3.1")
+    profile = SourceProfile.with_defaults(source_id=0, bus_info="usb-0000:00:14.0-3.1")
     repo.save(profile)
 
     found = repo.get_by_bus_info("usb-0000:00:14.0-3.1")
@@ -66,52 +66,52 @@ def test_get_by_bus_info(tmp_path):
     assert not_found is None
 
 
-def test_get_by_cam_id(tmp_path):
-    """Can retrieve profile by cam_id."""
+def test_get_by_source_id(tmp_path):
+    """Can retrieve profile by source_id."""
     repo = ProfileRepository(tmp_path)
-    profile = CameraProfile.with_defaults(cam_id=5, bus_info="usb-1")
+    profile = SourceProfile.with_defaults(source_id=5, bus_info="usb-1")
     repo.save(profile)
 
-    found = repo.get_by_cam_id(5)
+    found = repo.get_by_source_id(5)
     assert found == profile
 
-    not_found = repo.get_by_cam_id(999)
+    not_found = repo.get_by_source_id(999)
     assert not_found is None
 
 
-def test_next_cam_id_increments(tmp_path):
-    """next_cam_id returns max + 1."""
+def test_next_source_id_increments(tmp_path):
+    """next_source_id returns max + 1."""
     repo = ProfileRepository(tmp_path)
 
     # Empty repository
-    assert repo.next_cam_id() == 0
+    assert repo.next_source_id() == 0
 
-    # After adding cam_0
-    repo.save(CameraProfile.with_defaults(cam_id=0, bus_info="usb-1"))
-    assert repo.next_cam_id() == 1
+    # After adding source_0
+    repo.save(SourceProfile.with_defaults(source_id=0, bus_info="usb-1"))
+    assert repo.next_source_id() == 1
 
-    # After adding cam_5 (should skip to 6, not 2)
-    repo.save(CameraProfile.with_defaults(cam_id=5, bus_info="usb-2"))
-    assert repo.next_cam_id() == 6
+    # After adding source_5 (should skip to 6, not 2)
+    repo.save(SourceProfile.with_defaults(source_id=5, bus_info="usb-2"))
+    assert repo.next_source_id() == 6
 
 
 def test_delete_profile(tmp_path):
-    """Can delete profile by cam_id."""
+    """Can delete profile by source_id."""
     repo = ProfileRepository(tmp_path)
-    repo.save(CameraProfile.with_defaults(cam_id=0, bus_info="usb-1"))
-    repo.save(CameraProfile.with_defaults(cam_id=1, bus_info="usb-2"))
+    repo.save(SourceProfile.with_defaults(source_id=0, bus_info="usb-1"))
+    repo.save(SourceProfile.with_defaults(source_id=1, bus_info="usb-2"))
 
     deleted = repo.delete(0)
     assert deleted is True
     assert len(repo.load_all()) == 1
-    assert repo.get_by_cam_id(0) is None
-    assert repo.get_by_cam_id(1) is not None
+    assert repo.get_by_source_id(0) is None
+    assert repo.get_by_source_id(1) is not None
 
 
 def test_delete_nonexistent(tmp_path):
     """Deleting nonexistent profile returns False."""
     repo = ProfileRepository(tmp_path)
-    repo.save(CameraProfile.with_defaults(cam_id=0, bus_info="usb-1"))
+    repo.save(SourceProfile.with_defaults(source_id=0, bus_info="usb-1"))
 
     deleted = repo.delete(999)
     assert deleted is False
@@ -131,7 +131,7 @@ def test_malformed_toml_raises(tmp_path):
 def test_controls_empty(tmp_path):
     """Empty controls dict is omitted from TOML."""
     repo = ProfileRepository(tmp_path)
-    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-1")
+    profile = SourceProfile.with_defaults(source_id=0, bus_info="usb-1")
 
     repo.save(profile)
 
@@ -151,8 +151,8 @@ def test_controls_roundtrip(tmp_path):
         "brightness": ControlValue(value=128, min=0, max=255),
         "gain": ControlValue(value=32, min=0, max=100),
     }
-    profile = CameraProfile(
-        cam_id=0,
+    profile = SourceProfile(
+        source_id=0,
         bus_info="usb-1",
         label="test",
         controls=controls,
@@ -175,8 +175,8 @@ def test_controls_toml_format(tmp_path):
     controls = {
         "brightness": ControlValue(value=128, min=0, max=255),
     }
-    profile = CameraProfile(
-        cam_id=0,
+    profile = SourceProfile(
+        source_id=0,
         bus_info="usb-1",
         label="test",
         controls=controls,
@@ -198,8 +198,8 @@ def test_forward_compatibility_unknown_fields(tmp_path):
     toml_path = tmp_path / "multiwebcam.toml"
     toml_path.write_text(
         """
-[[cameras]]
-cam_id = 0
+[[sources]]
+source_id = 0
 label = "test"
 bus_info = "usb-1"
 ignore = false
@@ -215,7 +215,7 @@ another_unknown = 123
     profiles = repo.load_all()
 
     assert len(profiles) == 1
-    assert profiles[0].cam_id == 0
+    assert profiles[0].source_id == 0
     assert profiles[0].label == "test"
 
 
@@ -224,8 +224,8 @@ def test_missing_required_field_raises(tmp_path):
     toml_path = tmp_path / "multiwebcam.toml"
     toml_path.write_text(
         """
-[[cameras]]
-cam_id = 0
+[[sources]]
+source_id = 0
 # Missing bus_info and label
 """
     )
@@ -247,7 +247,7 @@ if __name__ == "__main__":
     # Test basic save/load
     print("Test: save and load profile")
     repo = ProfileRepository(debug_dir)
-    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-test-1", label="debug_camera")
+    profile = SourceProfile.with_defaults(source_id=0, bus_info="usb-test-1", label="debug_source")
     repo.save(profile)
     loaded = repo.load_all()
     print(f"Saved and loaded: {loaded[0]}")
@@ -255,7 +255,7 @@ if __name__ == "__main__":
 
     # Test multiple profiles
     print("Test: multiple profiles")
-    repo.save(CameraProfile.with_defaults(cam_id=1, bus_info="usb-test-2", label="camera_2"))
+    repo.save(SourceProfile.with_defaults(source_id=1, bus_info="usb-test-2", label="source_2"))
 
     # Test with controls
     controls = {
@@ -263,16 +263,16 @@ if __name__ == "__main__":
         "brightness": ControlValue(value=128, min=0, max=255),
     }
     repo.save(
-        CameraProfile(
-            cam_id=2,
+        SourceProfile(
+            source_id=2,
             bus_info="usb-test-3",
-            label="camera_3",
+            label="source_3",
             controls=controls,
         )
     )
     all_profiles = repo.load_all()
     print(f"Total profiles: {len(all_profiles)}")
     for p in all_profiles:
-        print(f"  cam_id={p.cam_id}, label={p.label}, bus_info={p.bus_info}, controls={len(p.controls)}")
+        print(f"  source_id={p.source_id}, label={p.label}, bus_info={p.bus_info}, controls={len(p.controls)}")
 
     print("\nDone. Check TOML file for structure.")

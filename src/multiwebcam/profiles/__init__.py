@@ -1,14 +1,14 @@
-"""Camera profile persistence system.
+"""Source profile persistence system.
 
-Provides CameraProfile dataclass and ProfileRepository for saving/loading
-camera configurations to TOML files.
+Provides SourceProfile dataclass and ProfileRepository for saving/loading
+source configurations to TOML files.
 """
 
-from multiwebcam.profiles.camera_profile import CameraProfile, ControlValue
+from multiwebcam.profiles.profile import ControlValue, SourceProfile
 from multiwebcam.profiles.repository import ProfileError, ProfileNotFoundError, ProfileParseError, ProfileRepository
 
 __all__ = [
-    "CameraProfile",
+    "SourceProfile",
     "ControlValue",
     "ProfileRepository",
     "ProfileError",

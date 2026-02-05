@@ -31,25 +31,31 @@ class CaptureSession:
     Creates producer threads for each camera and provides access to latest
     frames and per-camera statistics.
 
+    Long-lived model - create once, call start()/stop() explicitly.
+    No context manager pattern (to avoid confusion in MVP architecture).
+
     Usage:
         sources = [
             FrameSource("/dev/video0"),
             FrameSource("/dev/video2"),
         ]
 
-        with CaptureSession(sources) as session:
-            while True:
-                # Get latest frames for display
-                frames = session.get_latest_frames()
-                for device_path, packet in frames.items():
-                    if packet is not None:
-                        cv2.imshow(device_path, packet.frame)
+        session = CaptureSession(sources)
+        session.start()
 
-                # Check camera stats
-                stats = session.get_camera_stats()
-                if stats:
-                    for device_path, stat in stats.items():
-                        print(f"{device_path}: {stat.measured_fps:.1f} fps")
+        # Get latest frames for display
+        frames = session.get_latest_frames()
+        for device_path, packet in frames.items():
+            if packet is not None:
+                cv2.imshow(device_path, packet.frame)
+
+        # Check camera stats
+        stats = session.get_camera_stats()
+        if stats:
+            for device_path, stat in stats.items():
+                print(f"{device_path}: {stat.measured_fps:.1f} fps")
+
+        session.stop()
     """
 
     def __init__(
@@ -81,7 +87,7 @@ class CaptureSession:
 
         # Per-camera queue bundles (display, recording, alignment)
         self._producer_queues: dict[str, ProducerQueues] = {}
-        self._producers: list[FrameProducer] = []
+        self._producers: dict[str, FrameProducer] = {}  # device_path -> producer
 
         # Alignment monitor (if monitoring enabled)
         self._alignment_monitor: AlignmentMonitor | None = None
@@ -133,10 +139,10 @@ class CaptureSession:
                 queues=queues,
                 is_recording=self._is_recording,
             )
-            self._producers.append(producer)
+            self._producers[path] = producer
 
         # Start all producers
-        for producer in self._producers:
+        for producer in self._producers.values():
             producer.start()
 
         # Start alignment monitor if monitoring enabled
@@ -168,11 +174,43 @@ class CaptureSession:
             self._alignment_monitor.stop()
 
         # Stop all producers
-        for producer in self._producers:
+        for producer in self._producers.values():
             producer.stop()
 
         self._running = False
         logger.info("Capture session stopped")
+
+    def pause_producer(self, device_path: str) -> None:
+        """Pause a specific producer by device path."""
+        if device_path not in self._producers:
+            raise ValueError(f"No producer found for device path: {device_path}")
+        if self._is_recording.is_set():
+            logger.warning(f"Pausing {device_path} while recording - frames will be missing")
+        self._producers[device_path].pause()
+
+    def resume_producer(self, device_path: str) -> None:
+        """Resume a specific producer by device path."""
+        if device_path not in self._producers:
+            raise ValueError(f"No producer found for device path: {device_path}")
+        self._producers[device_path].resume()
+
+    def pause_all_except(self, device_path: str) -> None:
+        """Pause all producers except the specified one."""
+        if device_path not in self._producers:
+            raise ValueError(f"No producer found for device path: {device_path}")
+        if self._is_recording.is_set():
+            paused_cameras = [p for p in self._producers.keys() if p != device_path]
+            logger.warning(
+                f"Pausing {len(paused_cameras)} camera(s) while recording - frames will be missing"
+            )
+        for path, producer in self._producers.items():
+            if path != device_path:
+                producer.pause()
+
+    def resume_all(self) -> None:
+        """Resume all producers."""
+        for producer in self._producers.values():
+            producer.resume()
 
     def get_latest_frames(self) -> dict[str, FramePacket | None]:
         """
@@ -341,8 +379,7 @@ class CaptureSession:
         """
         camera_stats: dict[str, CameraStats] = {}
 
-        for producer in self._producers:
-            device_path = producer.device_path
+        for device_path, producer in self._producers.items():
 
             # Calculate frames received this window
             current_count = producer.frames_captured
@@ -442,12 +479,3 @@ class CaptureSession:
         logger.info(
             f"PTS validation passed: {len(pts_cameras)} camera(s) using compatible timestamps (spread: {spread:.3f}s)"
         )
-
-    def __enter__(self) -> CaptureSession:
-        """Context manager entry - starts session."""
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Context manager exit - stops session."""
-        self.stop()

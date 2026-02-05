@@ -1,8 +1,8 @@
 """New PyAV-based multiwebcam package."""
 
-from multiwebcam.profiles import CameraProfile, ProfileRepository
+from multiwebcam.profiles import ProfileRepository, SourceProfile
 
 __all__ = [
-    "CameraProfile",
+    "SourceProfile",
     "ProfileRepository",
 ]

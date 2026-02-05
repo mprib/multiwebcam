@@ -1,17 +1,17 @@
-"""Tests for CameraProfile dataclass."""
+"""Tests for SourceProfile dataclass."""
 
 import pytest
 
-from multiwebcam.profiles.camera_profile import CameraProfile, ControlValue
+from multiwebcam.profiles.profile import ControlValue, SourceProfile
 
 
 def test_with_defaults():
     """with_defaults creates profile with sensible defaults."""
-    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-1")
+    profile = SourceProfile.with_defaults(source_id=0, bus_info="usb-1")
 
-    assert profile.cam_id == 0
+    assert profile.source_id == 0
     assert profile.bus_info == "usb-1"
-    assert profile.label == "cam_0"
+    assert profile.label == "source_0"
     assert profile.ignore is False
     assert profile.resolution == (1280, 720)
     assert profile.pixel_format == "mjpeg"
@@ -21,15 +21,15 @@ def test_with_defaults():
 
 def test_with_defaults_custom_label():
     """with_defaults accepts custom label."""
-    profile = CameraProfile.with_defaults(cam_id=5, bus_info="usb-2", label="front_camera")
+    profile = SourceProfile.with_defaults(source_id=5, bus_info="usb-2", label="front_camera")
 
-    assert profile.cam_id == 5
+    assert profile.source_id == 5
     assert profile.label == "front_camera"
 
 
 def test_with_resolution():
     """with_resolution returns new profile with updated resolution."""
-    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-1")
+    profile = SourceProfile.with_defaults(source_id=0, bus_info="usb-1")
     updated = profile.with_resolution((1920, 1080))
 
     # Original unchanged
@@ -37,22 +37,22 @@ def test_with_resolution():
 
     # Updated has new resolution
     assert updated.resolution == (1920, 1080)
-    assert updated.cam_id == 0  # Other fields unchanged
+    assert updated.source_id == 0  # Other fields unchanged
 
 
 def test_with_label():
     """with_label returns new profile with updated label."""
-    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-1")
+    profile = SourceProfile.with_defaults(source_id=0, bus_info="usb-1")
     updated = profile.with_label("updated_label")
 
-    assert profile.label == "cam_0"
+    assert profile.label == "source_0"
     assert updated.label == "updated_label"
-    assert updated.cam_id == 0
+    assert updated.source_id == 0
 
 
 def test_with_ignore():
     """with_ignore returns new profile with updated ignore flag."""
-    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-1")
+    profile = SourceProfile.with_defaults(source_id=0, bus_info="usb-1")
     updated = profile.with_ignore(True)
 
     assert profile.ignore is False
@@ -61,7 +61,7 @@ def test_with_ignore():
 
 def test_with_updates():
     """with_updates can change multiple fields at once."""
-    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-1")
+    profile = SourceProfile.with_defaults(source_id=0, bus_info="usb-1")
     controls = {
         "exposure": ControlValue(150, 3, 2047),
         "gain": ControlValue(32, 0, 100),
@@ -73,7 +73,7 @@ def test_with_updates():
     )
 
     # Original unchanged
-    assert profile.label == "cam_0"
+    assert profile.label == "source_0"
     assert profile.resolution == (1280, 720)
     assert profile.controls == {}
 
@@ -85,7 +85,7 @@ def test_with_updates():
 
 def test_immutability():
     """Profile is frozen (immutable)."""
-    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-1")
+    profile = SourceProfile.with_defaults(source_id=0, bus_info="usb-1")
 
     # Attempting to modify should raise
     try:
@@ -139,7 +139,7 @@ def test_control_value_immutability():
 
 def test_with_control():
     """with_control adds/updates a control."""
-    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-1")
+    profile = SourceProfile.with_defaults(source_id=0, bus_info="usb-1")
 
     # Add first control
     brightness = ControlValue(value=128, min=0, max=255)
@@ -161,7 +161,7 @@ def test_with_control_updates_existing():
     brightness1 = ControlValue(value=128, min=0, max=255)
     brightness2 = ControlValue(value=200, min=0, max=255)
 
-    profile = CameraProfile.with_defaults(cam_id=0, bus_info="usb-1")
+    profile = SourceProfile.with_defaults(source_id=0, bus_info="usb-1")
     profile = profile.with_control("brightness", brightness1)
     updated = profile.with_control("brightness", brightness2)
 

@@ -180,7 +180,10 @@ def run_test(recording_duration: float = 5.0) -> None:
 
     # Create capture session
     logger.info("\nStarting capture session...")
-    with CaptureSession(sources, enable_monitoring=True) as session:
+    session = CaptureSession(sources, enable_monitoring=True)
+    session.start()
+
+    try:
         logger.info("Session started, warming up for 1 second...")
         time.sleep(1.0)
 
@@ -271,6 +274,9 @@ def run_test(recording_duration: float = 5.0) -> None:
         else:
             logger.error("[FAIL] TEST FAILED")
         logger.info("=" * 60)
+
+    finally:
+        session.stop()
 
 
 if __name__ == "__main__":

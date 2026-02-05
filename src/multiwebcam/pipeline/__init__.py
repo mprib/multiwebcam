@@ -21,24 +21,28 @@ Example:
         FrameSource("/dev/video2"),
     ]
 
-    with CaptureSession(sources) as session:
-        # Get latest frames for display
-        frames = session.get_latest_frames()
-        for device_path, packet in frames.items():
-            if packet is not None:
-                print(f"{device_path}: frame {packet.frame_index}")
+    session = CaptureSession(sources)
+    session.start()
 
-        # Check per-camera stats (fps, jitter)
-        stats = session.get_camera_stats()
-        if stats:
-            for device_path, stat in stats.items():
-                print(f"{device_path}: {stat.measured_fps:.1f} fps, {stat.jitter_ms:.1f}ms jitter")
+    # Get latest frames for display
+    frames = session.get_latest_frames()
+    for device_path, packet in frames.items():
+        if packet is not None:
+            print(f"{device_path}: frame {packet.frame_index}")
 
-        # Check alignment quality
-        alignment = session.get_alignment_stats()
-        if alignment:
-            print(f"Complete clusters: {alignment.complete_cluster_pct:.1f}%")
-            print(f"Mean spread: {alignment.mean_spread_ms:.1f}ms")
+    # Check per-camera stats (fps, jitter)
+    stats = session.get_camera_stats()
+    if stats:
+        for device_path, stat in stats.items():
+            print(f"{device_path}: {stat.measured_fps:.1f} fps, {stat.jitter_ms:.1f}ms jitter")
+
+    # Check alignment quality
+    alignment = session.get_alignment_stats()
+    if alignment:
+        print(f"Complete clusters: {alignment.complete_cluster_pct:.1f}%")
+        print(f"Mean spread: {alignment.mean_spread_ms:.1f}ms")
+
+    session.stop()
 """
 
 from multiwebcam.pipeline.alignment import AlignmentMonitor, AlignmentStats

@@ -68,7 +68,9 @@ class FrameProducer:
         self.is_recording = is_recording
         self._thread: Thread | None = None
         self._shutdown_event = Event()
-        self._running = False
+        self._resume_event = Event()
+        self._resume_event.set()  # Start in running state
+        self._running = False  # Tracks thread lifecycle
         self._frames_captured = 0
 
     @property
@@ -85,6 +87,19 @@ class FrameProducer:
     def frames_captured(self) -> int:
         """Total frames captured by this producer."""
         return self._frames_captured
+
+    def pause(self) -> None:
+        """Pause frame production. Producer thread blocks until resume()."""
+        self._resume_event.clear()
+
+    def resume(self) -> None:
+        """Resume frame production after pause."""
+        self._resume_event.set()
+
+    @property
+    def is_paused(self) -> bool:
+        """True if producer is paused."""
+        return not self._resume_event.is_set()
 
     def start(self) -> None:
         """Start the producer thread."""
@@ -113,6 +128,7 @@ class FrameProducer:
 
         logger.info(f"Stopping producer for {self.device_path}")
         self._shutdown_event.set()
+        self._resume_event.set()  # Unblock if paused
 
         # Close the source to unblock decode() - do this from main thread
         # This will cause the producer thread's decode() to raise an exception
@@ -135,6 +151,10 @@ class FrameProducer:
             self.source.start()
 
             for packet in self.source:
+                # Block if paused
+                self._resume_event.wait()
+
+                # Check shutdown after resume to avoid processing one more frame
                 if self._shutdown_event.is_set():
                     break
 

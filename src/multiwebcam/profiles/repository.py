@@ -1,4 +1,4 @@
-"""Profile repository for loading and saving camera profiles to TOML."""
+"""Profile repository for loading and saving source profiles to TOML."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import rtoml
 
-from multiwebcam.profiles.camera_profile import CameraProfile, ControlValue
+from multiwebcam.profiles.profile import ControlValue, SourceProfile
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class ProfileNotFoundError(ProfileError):
 
 
 class ProfileRepository:
-    """Load and save camera profiles to TOML.
+    """Load and save source profiles to TOML.
 
     Operates on a single file: <project_path>/multiwebcam.toml
     Uses rtoml for fast, correct TOML serialization.
@@ -42,7 +42,7 @@ class ProfileRepository:
         self._project_path = project_path
         self._toml_path = project_path / "multiwebcam.toml"
 
-    def load_all(self) -> list[CameraProfile]:
+    def load_all(self) -> list[SourceProfile]:
         """Load all profiles from TOML.
 
         Returns empty list if file doesn't exist (fresh project).
@@ -59,26 +59,26 @@ class ProfileRepository:
         except Exception as e:
             raise ProfileParseError(f"Failed to parse TOML file: {e}") from e
 
-        # Extract cameras array
-        cameras_list = data.get("cameras", [])
-        if not isinstance(cameras_list, list):
-            raise ProfileParseError("'cameras' must be an array of tables")
+        # Extract sources array
+        sources_list = data.get("sources", [])
+        if not isinstance(sources_list, list):
+            raise ProfileParseError("'sources' must be an array of tables")
 
         profiles = []
-        for i, camera_dict in enumerate(cameras_list):
+        for i, source_dict in enumerate(sources_list):
             try:
-                profile = self._dict_to_profile(camera_dict)
+                profile = self._dict_to_profile(source_dict)
                 profiles.append(profile)
             except (TypeError, KeyError) as e:
-                raise ProfileParseError(f"Invalid camera entry at index {i}: {e}") from e
+                raise ProfileParseError(f"Invalid source entry at index {i}: {e}") from e
 
         logger.info(f"Loaded {len(profiles)} profile(s) from {self._toml_path}")
         return profiles
 
-    def save(self, profile: CameraProfile) -> None:
+    def save(self, profile: SourceProfile) -> None:
         """Save or update a profile.
 
-        If a profile with the same cam_id exists, it's replaced.
+        If a profile with the same source_id exists, it's replaced.
         If not, the profile is appended.
         Creates the TOML file if it doesn't exist.
 
@@ -91,7 +91,7 @@ class ProfileRepository:
         # Replace or append
         found = False
         for i, existing in enumerate(profiles):
-            if existing.cam_id == profile.cam_id:
+            if existing.source_id == profile.source_id:
                 profiles[i] = profile
                 found = True
                 break
@@ -101,29 +101,29 @@ class ProfileRepository:
 
         # Write back
         self._write_all(profiles)
-        logger.debug(f"Saved profile cam_id={profile.cam_id} to {self._toml_path}")
+        logger.debug(f"Saved profile source_id={profile.source_id} to {self._toml_path}")
 
-    def delete(self, cam_id: int) -> bool:
-        """Delete a profile by cam_id.
+    def delete(self, source_id: int) -> bool:
+        """Delete a profile by source_id.
 
         Args:
-            cam_id: Camera ID to delete
+            source_id: Source ID to delete
 
         Returns:
             True if deleted, False if not found.
         """
         profiles = self.load_all()
         original_count = len(profiles)
-        profiles = [p for p in profiles if p.cam_id != cam_id]
+        profiles = [p for p in profiles if p.source_id != source_id]
 
         if len(profiles) < original_count:
             self._write_all(profiles)
-            logger.debug(f"Deleted profile cam_id={cam_id}")
+            logger.debug(f"Deleted profile source_id={source_id}")
             return True
 
         return False
 
-    def get_by_bus_info(self, bus_info: str) -> CameraProfile | None:
+    def get_by_bus_info(self, bus_info: str) -> SourceProfile | None:
         """Find profile matching the given bus_info.
 
         Args:
@@ -138,33 +138,33 @@ class ProfileRepository:
                 return profile
         return None
 
-    def get_by_cam_id(self, cam_id: int) -> CameraProfile | None:
-        """Find profile by cam_id.
+    def get_by_source_id(self, source_id: int) -> SourceProfile | None:
+        """Find profile by source_id.
 
         Args:
-            cam_id: Camera ID
+            source_id: Source ID
 
         Returns:
             Matching profile or None if not found.
         """
         profiles = self.load_all()
         for profile in profiles:
-            if profile.cam_id == cam_id:
+            if profile.source_id == source_id:
                 return profile
         return None
 
-    def next_cam_id(self) -> int:
-        """Return next available cam_id.
+    def next_source_id(self) -> int:
+        """Return next available source_id.
 
         Returns:
-            max(existing_cam_ids) + 1, or 0 if no profiles exist.
+            max(existing_source_ids) + 1, or 0 if no profiles exist.
         """
         profiles = self.load_all()
         if not profiles:
             return 0
-        return max(p.cam_id for p in profiles) + 1
+        return max(p.source_id for p in profiles) + 1
 
-    def _write_all(self, profiles: list[CameraProfile]) -> None:
+    def _write_all(self, profiles: list[SourceProfile]) -> None:
         """Write all profiles to TOML file.
 
         Args:
@@ -172,7 +172,7 @@ class ProfileRepository:
         """
         # Build TOML structure
         data = {
-            "cameras": [self._profile_to_dict(p) for p in profiles],
+            "sources": [self._profile_to_dict(p) for p in profiles],
         }
 
         # Ensure directory exists
@@ -181,13 +181,13 @@ class ProfileRepository:
         # Write to file
         rtoml.dump(data, self._toml_path)
 
-    def _profile_to_dict(self, profile: CameraProfile) -> dict:
+    def _profile_to_dict(self, profile: SourceProfile) -> dict:
         """Convert profile to dict for TOML serialization.
 
         Omits empty controls dict.
         """
         d = {
-            "cam_id": profile.cam_id,
+            "source_id": profile.source_id,
             "label": profile.label,
             "bus_info": profile.bus_info,
             "ignore": profile.ignore,
@@ -205,8 +205,8 @@ class ProfileRepository:
 
         return d
 
-    def _dict_to_profile(self, d: dict) -> CameraProfile:
-        """Convert dict from TOML to CameraProfile.
+    def _dict_to_profile(self, d: dict) -> SourceProfile:
+        """Convert dict from TOML to SourceProfile.
 
         Unknown fields are ignored for forward compatibility.
 
@@ -215,7 +215,7 @@ class ProfileRepository:
             TypeError: If field has wrong type
         """
         # Required fields
-        cam_id = d["cam_id"]
+        source_id = d["source_id"]
         label = d["label"]
         bus_info = d["bus_info"]
 
@@ -236,8 +236,8 @@ class ProfileRepository:
                 max=cv_dict["max"],
             )
 
-        return CameraProfile(
-            cam_id=cam_id,
+        return SourceProfile(
+            source_id=source_id,
             label=label,
             bus_info=bus_info,
             ignore=ignore,
