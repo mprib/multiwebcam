@@ -19,15 +19,16 @@ from multiwebcam.ui.views.aspect_ratio_label import AspectRatioLabel
 class FocusView(QWidget):
     """Large preview of single source with configuration panel.
 
+    Format is locked to MJPEG (lower USB bandwidth, universal support).
+    Only resolution and framerate are user-configurable.
+
     Signals:
         back_requested: User wants to return to grid view
-        format_selected: User changed format combo
         resolution_selected: User changed resolution combo
         apply_requested: User clicked Apply button
     """
 
     back_requested = Signal()
-    format_selected = Signal(str)
     resolution_selected = Signal(str)
     apply_requested = Signal()
 
@@ -58,9 +59,6 @@ class FocusView(QWidget):
         config_form = QFormLayout()
         panel_layout.addLayout(config_form)
 
-        self._format_combo = QComboBox()
-        config_form.addRow("Format:", self._format_combo)
-
         self._resolution_combo = QComboBox()
         config_form.addRow("Resolution:", self._resolution_combo)
 
@@ -90,7 +88,6 @@ class FocusView(QWidget):
         panel_layout.addWidget(self._back_btn)
 
         # Wire up signals
-        self._format_combo.currentTextChanged.connect(self.format_selected.emit)
         self._resolution_combo.currentTextChanged.connect(self.resolution_selected.emit)
         self._apply_btn.clicked.connect(self.apply_requested.emit)
         self._back_btn.clicked.connect(self.back_requested.emit)
@@ -107,13 +104,6 @@ class FocusView(QWidget):
         """Update stats display."""
         self._stats_label.setText(f"{stats.measured_fps:.1f} fps | {stats.jitter_ms:.1f}ms jitter")
 
-    def populate_formats(self, formats: list[str]) -> None:
-        """Populate format combo. Blocks signals during population."""
-        self._format_combo.blockSignals(True)
-        self._format_combo.clear()
-        self._format_combo.addItems(formats)
-        self._format_combo.blockSignals(False)
-
     def populate_resolutions(self, resolutions: list[str]) -> None:
         """Populate resolution combo. Blocks signals during population."""
         self._resolution_combo.blockSignals(True)
@@ -128,31 +118,22 @@ class FocusView(QWidget):
         self._framerate_combo.addItems(framerates)
         self._framerate_combo.blockSignals(False)
 
-    def set_current_config(self, pixel_format: str, resolution: str, framerate: str) -> None:
-        """Set current selection in all combos without triggering signals."""
-        self._format_combo.blockSignals(True)
+    def set_current_config(self, resolution: str, framerate: str) -> None:
+        """Set current selection in combos without triggering signals."""
         self._resolution_combo.blockSignals(True)
         self._framerate_combo.blockSignals(True)
 
-        self._format_combo.setCurrentText(pixel_format)
         self._resolution_combo.setCurrentText(resolution)
         self._framerate_combo.setCurrentText(framerate)
 
-        self._format_combo.blockSignals(False)
         self._resolution_combo.blockSignals(False)
         self._framerate_combo.blockSignals(False)
 
     def set_config_enabled(self, enabled: bool) -> None:
         """Enable/disable all config controls (disabled during recording)."""
-        self._format_combo.setEnabled(enabled)
         self._resolution_combo.setEnabled(enabled)
         self._framerate_combo.setEnabled(enabled)
         self._apply_btn.setEnabled(enabled)
-
-    @property
-    def selected_format(self) -> str:
-        """Return currently selected format."""
-        return self._format_combo.currentText()
 
     @property
     def selected_resolution(self) -> tuple[int, int]:

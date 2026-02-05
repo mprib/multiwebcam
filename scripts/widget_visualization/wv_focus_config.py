@@ -1,8 +1,8 @@
 """Visual test for FocusView configuration panel.
 
-Tests the FocusView layout with its side panel containing format/resolution/fps
-combo boxes and Apply button. Verifies layout with different configurations,
-disabled states, and aspect ratios.
+Tests the FocusView layout with its side panel containing resolution/fps
+combo boxes and Apply button. Format is locked to MJPEG.
+Verifies layout with different configurations, disabled states, and aspect ratios.
 
 Usage:
     python scripts/widget_visualization/wv_focus_config.py
@@ -61,12 +61,11 @@ def main() -> None:
     view = FocusView(source_id=0, label="HD Pro Webcam C920")
 
     print("  Populating configuration options...")
-    view.populate_formats(["mjpeg", "yuyv422"])
     view.populate_resolutions(["1920x1080", "1280x720", "640x480"])
     view.populate_framerates(["30", "15", "5"])
 
-    print("  Setting current config to mjpeg, 1280x720, 30fps...")
-    view.set_current_config("mjpeg", "1280x720", "30")
+    print("  Setting current config to 1280x720, 30fps...")
+    view.set_current_config("1280x720", "30")
 
     print("  Displaying 16:9 test image (1280x720)...")
     pixmap_16x9 = create_test_pixmap(1280, 720, QColor(0, 100, 200), "16:9")
@@ -87,10 +86,9 @@ def main() -> None:
 
     print("  Creating FocusView with same configuration...")
     view = FocusView(source_id=0, label="HD Pro Webcam C920")
-    view.populate_formats(["mjpeg", "yuyv422"])
     view.populate_resolutions(["1920x1080", "1280x720", "640x480"])
     view.populate_framerates(["30", "15", "5"])
-    view.set_current_config("mjpeg", "1280x720", "30")
+    view.set_current_config("1280x720", "30")
     view.display_frame(pixmap_16x9)
 
     print("  Disabling config controls (recording state)...")
@@ -111,12 +109,11 @@ def main() -> None:
 
     print("  Creating FocusView with 4:3 image...")
     view = FocusView(source_id=0, label="HD Pro Webcam C920")
-    view.populate_formats(["mjpeg", "yuyv422"])
     view.populate_resolutions(["1024x768", "800x600", "640x480"])
     view.populate_framerates(["30", "15", "5"])
 
-    print("  Setting current config to mjpeg, 1024x768, 30fps...")
-    view.set_current_config("mjpeg", "1024x768", "30")
+    print("  Setting current config to 1024x768, 30fps...")
+    view.set_current_config("1024x768", "30")
 
     print("  Displaying 4:3 test image (1024x768)...")
     pixmap_4x3 = create_test_pixmap(1024, 768, QColor(0, 150, 0), "4:3")
@@ -141,7 +138,7 @@ def main() -> None:
     print("  [ ] focus_config_populated.png:")
     print("      - 16:9 image displayed in left panel (75% width)")
     print("      - Configuration panel on right (25% width)")
-    print("      - Format, Resolution, Framerate combos populated")
+    print("      - Resolution, Framerate combos populated (no format combo)")
     print("      - Apply button enabled")
     print("      - Camera info and stats labels visible")
     print("      - Back to Grid button at bottom")

@@ -204,12 +204,11 @@ class CaptureCoordinator(QObject):
         presenter.frame_ready.connect(view.display_frame)
         presenter.stats_updated.connect(view.update_stats)
 
-        # Wire format/resolution/framerate populate signals
+        # Wire resolution/framerate populate signals
         presenter.resolutions_available.connect(view.populate_resolutions)
         presenter.framerates_available.connect(view.populate_framerates)
 
-        # Wire view combo changes to presenter cascade methods
-        view.format_selected.connect(presenter.on_format_selected)
+        # Wire view combo change to presenter cascade
         view.resolution_selected.connect(presenter.on_resolution_selected)
 
         # Wire Apply button through coordinator
@@ -217,13 +216,9 @@ class CaptureCoordinator(QObject):
             lambda: self._on_apply_config(presenter, view)
         )
 
-        # Populate formats immediately (static - doesn't need cascading)
-        view.populate_formats(presenter.available_formats)
-
         # Set current config in view
         w, h = config.resolution
         view.set_current_config(
-            pixel_format=config.pixel_format,
             resolution=f"{w}x{h}",
             framerate=str(config.fps),
         )
@@ -232,19 +227,18 @@ class CaptureCoordinator(QObject):
 
     def _on_apply_config(self, presenter, view) -> None:
         """Handle Apply button click - change source configuration."""
-        # Read current selections from view
-        pixel_format = view.selected_format
+        # Read current selections from view (format always mjpeg)
         resolution = view.selected_resolution
         framerate = view.selected_framerate
 
-        if not pixel_format or resolution == (0, 0) or framerate == 0:
+        if resolution == (0, 0) or framerate == 0:
             presenter.apply_config_error("Invalid configuration selected")
             return
 
         new_config = FrameSourceConfig(
             resolution=resolution,
             fps=framerate,
-            pixel_format=pixel_format,
+            pixel_format="mjpeg",
         )
 
         device_path = presenter.device_path
@@ -267,7 +261,7 @@ class CaptureCoordinator(QObject):
                 updated_profile = info.profile.with_updates(
                     resolution=resolution,
                     capture_fps=framerate,
-                    pixel_format=pixel_format,
+                    pixel_format="mjpeg",
                 )
                 self._repo.save(updated_profile)
                 info.profile = updated_profile
