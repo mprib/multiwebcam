@@ -1229,6 +1229,7 @@ src/multiwebcam/
     |   +-- multi_source.py   # MultiSourcePresenter (grid mode)
     +-- views/
         +-- __init__.py
+        +-- aspect_ratio_label.py  # AspectRatioLabel (aspect-preserving pixmap display)
         +-- grid_view.py      # GridView with SourceTile widgets
         +-- focus_view.py     # FocusView (large preview + stats)
         +-- source_tile.py    # Single source display widget

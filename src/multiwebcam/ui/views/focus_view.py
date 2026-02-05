@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from multiwebcam.pipeline.report import CameraStats
+from multiwebcam.ui.views.aspect_ratio_label import AspectRatioLabel
 
 
 class FocusView(QWidget):
@@ -28,9 +29,8 @@ class FocusView(QWidget):
         layout = QVBoxLayout(self)
 
         # Large frame display
-        self._frame_label = QLabel()
+        self._frame_label = AspectRatioLabel()
         self._frame_label.setMinimumSize(640, 480)
-        self._frame_label.setScaledContents(True)
         layout.addWidget(self._frame_label, stretch=1)
 
         # Info bar
@@ -52,7 +52,7 @@ class FocusView(QWidget):
 
     def display_frame(self, pixmap: QPixmap) -> None:
         """Update the displayed frame."""
-        self._frame_label.setPixmap(pixmap)
+        self._frame_label.display_pixmap(pixmap)
 
     def update_stats(self, stats: CameraStats) -> None:
         """Update stats display."""

@@ -4,6 +4,8 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout
 
+from multiwebcam.ui.views.aspect_ratio_label import AspectRatioLabel
+
 
 class SourceTile(QFrame):
     """Displays a single video source with label and focus button.
@@ -19,9 +21,8 @@ class SourceTile(QFrame):
         self._source_id = source_id
 
         # Frame display
-        self._frame_label = QLabel()
+        self._frame_label = AspectRatioLabel()
         self._frame_label.setMinimumSize(320, 240)
-        self._frame_label.setScaledContents(True)
 
         # Source label
         self._name_label = QLabel(label)
@@ -46,7 +47,7 @@ class SourceTile(QFrame):
 
     def display_frame(self, pixmap: QPixmap) -> None:
         """Update the displayed frame."""
-        self._frame_label.setPixmap(pixmap)
+        self._frame_label.display_pixmap(pixmap)
 
     def update_stats(self, fps: float, jitter_ms: float = 0.0) -> None:
         """Update stats display."""
