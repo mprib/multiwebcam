@@ -1,105 +1,44 @@
-NOTE: I am archiving this project to focus on alternate workflows that could provide higher quality data capture while still at a reasonable cost.
-It will take me some time to have something to show for that, but I want people to know that I don't have the bandwidth currently to address any future issues raised on this repo.
+# multiwebcam
 
+Multi-camera capture and recording for USB webcams on Linux.
 
-<div align="center">  
+## Status: Under Active Revision
 
-# 📷📷📷 MULTIWEBCAM 📷📷📷
-  
-  <img src = "https://github.com/mprib/multiwebcam/assets/31831778/73636fdb-c5a1-4f29-af7d-418a1072b0be" width = "200">
+This project is being rebuilt from the ground up. The previous OpenCV-based implementation has been replaced with a PyAV/FFmpeg backend for more reliable V4L2 device handling.
 
-*Concurrent webcam recording to bootstrap low-cost/early-stage computer vision projects*
+**Platform:** Linux only. USB webcam support on Linux is inherently fussy—different cameras have different quirks, V4L2 drivers vary, and USB bandwidth constraints are real. No promises are made about this software working on your specific hardware configuration.
 
-</div>
+**Current state:**
+- Frame capture via PyAV (working)
+- Multi-camera recording to MP4 + timestamps (working)
+- Camera profile persistence (working)
+- Qt UI for live preview and recording (not yet implemented)
 
-<div align="center">
-  
-[![PyPI - License](https://img.shields.io/pypi/l/multiwebcam?color=blue)](https://www.gnu.org/licenses/lgpl-3.0.en.html)
-[![PyPI - Version](https://img.shields.io/pypi/v/multiwebcam?color=blue)](https://pypi.org/project/multiwebcam/)
-[![GitHub last commit](https://img.shields.io/github/last-commit/mprib/multiwebcam.svg)](https://github.com/mprib/multiwebcam/commits)
-![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)
+## What This Does
 
-</div>
+Captures frames from multiple USB webcams simultaneously and records them to individual MP4 files with accurate timestamps. The output is designed to feed into [Caliscope](https://github.com/mprib/caliscope) for multi-camera calibration and 3D reconstruction.
 
+This is **not** hardware-synchronized capture. Consumer USB webcams have no genlock capability. We capture frames independently and record timestamps so downstream tools can align them temporally (typical precision: 10-50ms).
 
-https://github.com/mprib/multiwebcam/assets/31831778/9eef8ada-cfce-4c7a-b6c1-5dba641dd48e
+## Requirements
 
+- Linux with V4L2 support
+- Python 3.11+
+- v4l2-utils (`sudo apt install v4l-utils`)
+- USB webcams (tested with Logitech C920, eMeet C960, Razer Kiyo Pro)
 
-# Introduction
-
-I needed a cheap way to record concurrent frames while prototyping a computer vision project ([caliscope](https://github.com/mprib/caliscope)). Extreme precision was less important than getting something reasonable with a minimal budget. When conscientiously managed, USB webcams controlled via OpenCV can perform surprisingly well at this task. I have spun this functionality off into its own package to create a clear separation of concerns between data capture and data processing, while hopefully creating a simpler package that others might find useful. 
-
-If MultiWebCam (MWC) is close to what you need but not quite, please feel free to raise an issue and I'll see if I can incorporate your use case. These are the core functions that are currently implemented:
-
-- Record concurrent frames from multiple webcams
-- Record from single webcams to pull single camera calibration video.
-- "time-align" frames in real time to understand dropped frame rate
-- include frame-by-frame time stamp history to facilitate off-line processing
-- easy adjustment of the following parameters:
-  - resolution
-  - exposure
-  - target fps
-
-
-# Quick Start
-## Basic `pip` install
-
-You can install MWC into your python environment with `pip install multiwebcam` and then launch it from the command line with
+## Installation
 
 ```bash
-mwc
-```
-
-Note that this has primarily been  tested on Windows 10, infrequently on MacOS, and will not work on Linux as far as I can tell ☹️. If someone is familiar with getting USB cameras working through OpenCV on Linux, I'm all ears.
-
-
-
-## Editable Install Using Poetry
-
-If you prefer to contribute to MWC or want to install it in editable mode, follow these steps using Poetry:
-
-Clone the Repository:
-
-```bash
-git clone https://github.com/mprib/multiwebcam.git
+git clone https://github.com/mprib/multiwebcam
 cd multiwebcam
+uv sync
 ```
 
-Install Poetry:
-```
-pip install poetry
-```
+## Usage
 
-Set Up the Environment:
+The GUI is not yet implemented. For now, see `scripts/` for example usage of the capture pipeline.
 
-```bash
-poetry install
-```
+## License
 
-By running poetry install, you'll install all dependencies and also set up the multiwebcam package in editable mode. Any changes you make to the code will be reflected in your environment.
-
-# Capturing Data
-
-1. Launch MultiWebCam from the command line:
-
-```
-mwc
-```
-
-2. Make sure that the USB cameras you want to use are currently plugged in when you launch the new session.
-
-3. Choose a new project directory through the File menu. MWC will attempt to connect to the cameras currently plugged in and will create a `recording_config.toml` file in the project directory. 
-
-4. From the `Mode` menu you can select single camera to change camera settings (such as resolution and exposure).
-5. On the MultCamera mode you can set the target fps to achieve a desired dropped frame rate
-6. Record videos
-
-## Checking Against System Clock
-
-To provide a check of the accuracy of the time stamps, you can launch a widget that displays the `perf_counter` from the system by running from the command line:
-
-```
-mwc clock
-```
-
-Cross checking the frames with the recorded time stamp value can provide a sense of the temporal accuracy of the recording. 
+See LICENSE file.
