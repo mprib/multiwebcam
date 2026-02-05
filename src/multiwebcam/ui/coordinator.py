@@ -136,6 +136,9 @@ class CaptureCoordinator(QObject):
         Returns:
             tuple[GridView, MultiSourcePresenter]: View and its presenter
         """
+        if self._session is None:
+            raise RuntimeError("Cannot create grid view: no capture session")
+
         from multiwebcam.ui.presenters import MultiSourcePresenter
         from multiwebcam.ui.views import GridView
 
@@ -177,6 +180,9 @@ class CaptureCoordinator(QObject):
         Raises:
             ValueError: If source is not available or has an error
         """
+        if self._session is None:
+            raise RuntimeError("Cannot create focus view: no capture session")
+
         from multiwebcam.ui.presenters import SingleSourcePresenter
         from multiwebcam.ui.views import FocusView
 
