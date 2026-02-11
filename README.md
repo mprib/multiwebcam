@@ -21,7 +21,7 @@ This is **not** hardware-synchronized capture. Consumer USB webcams have no genl
 
 ### Camera Compatibility
 
-Simple, "dumb" USB webcams work best. Cameras that just stream frames without complex firmware (like the **eMeet C960** or **Logitech C920**) are reliable and predictable.
+Simple, cheap, "dumb" USB webcams work best. Cameras that just stream frames without complex firmware (like the **eMeet C960**) are reliable and predictable.
 
 Feature-rich cameras (autofocus, dynamic exposure modes, HDR) tend to be **less** reliable. Their firmware can hang when V4L2 controls are changed mid-stream, sometimes requiring a physical USB replug to recover. The **Razer Kiyo Pro**, for example, freezes when switching exposure modes during capture.
 
