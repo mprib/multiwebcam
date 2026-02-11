@@ -1,3 +1,5 @@
+NOTE: This project is currently in substantial flux as I basically do a complete re-write using PyAV rather than OpenCV. It's more of a personal project at this time as I work through polishing it up. I may not have time to dedicate to making meaningful progress on it until April of 2026. Caveat emptor.
+
 # multiwebcam
 
 Multi-camera capture and recording for USB webcams on Linux. Output feeds into [Caliscope](https://github.com/mprib/caliscope) for calibration and 3D reconstruction.
