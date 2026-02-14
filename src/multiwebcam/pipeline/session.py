@@ -9,7 +9,7 @@ from queue import Empty, Queue
 from threading import Event
 
 from multiwebcam.pipeline.alignment import AlignmentMonitor, AlignmentStats
-from multiwebcam.pipeline.producer import FrameProducer, ProducerQueues
+from multiwebcam.pipeline.producer import FrameProducer, QueueBundle
 from multiwebcam.pipeline.report import CameraStats
 from multiwebcam.recording.recorder import FrameRecorder, RecordingResult
 from multiwebcam.sources.config import FrameSourceConfig, FrameSourceStatus
@@ -87,7 +87,7 @@ class CaptureSession:
         self.alignment_window_seconds = alignment_window_seconds
 
         # Per-camera queue bundles (display, recording, alignment)
-        self._producer_queues: dict[str, ProducerQueues] = {}
+        self._queue_bundles: dict[str, QueueBundle] = {}
         self._producers: dict[str, FrameProducer] = {}  # device_path -> producer
 
         # Alignment monitor (if monitoring enabled)
@@ -101,7 +101,7 @@ class CaptureSession:
         self._running = False
         self._is_recording = Event()  # Shared flag for producers
         self._frame_recorder: FrameRecorder | None = None  # Created on start_recording()
-        self._recording_paths: list[str] = []
+        self._recording_device_paths: list[str] = []
 
     def start(self) -> None:
         """Start all producers."""
@@ -129,13 +129,13 @@ class CaptureSession:
             buffer_size = int(self.recording_buffer_seconds * 30)
 
             # Create three-queue bundle
-            self._producer_queues[path] = ProducerQueues(
+            self._queue_bundles[path] = QueueBundle(
                 display=Queue(maxsize=1),
                 recording=Queue(maxsize=buffer_size),
                 alignment=Queue(maxsize=buffer_size),
             )
 
-            queues = self._producer_queues[path]
+            queues = self._queue_bundles[path]
             producer = FrameProducer(
                 source,
                 queues=queues,
@@ -149,7 +149,7 @@ class CaptureSession:
 
         # Start alignment monitor if monitoring enabled
         if self.enable_monitoring:
-            alignment_queues = {path: queues.alignment for path, queues in self._producer_queues.items()}
+            alignment_queues = {device_path: queues.alignment for device_path, queues in self._queue_bundles.items()}
             self._alignment_monitor = AlignmentMonitor(
                 alignment_queues,
                 expected_cameras=len(self.sources),
@@ -205,8 +205,8 @@ class CaptureSession:
             logger.warning(
                 f"Pausing {len(paused_cameras)} camera(s) while recording - frames will be missing"
             )
-        for path, producer in self._producers.items():
-            if path != device_path:
+        for other_path, producer in self._producers.items():
+            if other_path != device_path:
                 producer.pause()
 
     def resume_all(self) -> None:
@@ -250,7 +250,7 @@ class CaptureSession:
         old_producer.stop()
 
         # Drain stale display frame
-        queues = self._producer_queues[device_path]
+        queues = self._queue_bundles[device_path]
         try:
             queues.display.get_nowait()
         except Empty:
@@ -295,7 +295,7 @@ class CaptureSession:
         the queue always has the latest frame.
         """
         frames: dict[str, FramePacket | None] = {}
-        for device_path, queues in self._producer_queues.items():
+        for device_path, queues in self._queue_bundles.items():
             try:
                 # Consume the frame - producer's drop-oldest ensures it's latest
                 packet = queues.display.get_nowait()
@@ -364,32 +364,32 @@ class CaptureSession:
         # Build default cam_ids if not provided
         if cam_ids is None:
             cam_ids = {}
-            for i, path in enumerate(sorted(self._producer_queues.keys())):
-                # Extract device_id from path (e.g., /dev/video0 -> 0)
+            for i, device_path in enumerate(sorted(self._queue_bundles.keys())):
+                # Extract device_id from device_path (e.g., /dev/video0 -> 0)
                 try:
-                    device_id = int(path.split('video')[-1])
-                    cam_ids[path] = device_id
+                    device_id = int(device_path.split('video')[-1])
+                    cam_ids[device_path] = device_id
                 except ValueError:
-                    # Fallback to enumeration if path doesn't match expected format
-                    cam_ids[path] = i
+                    # Fallback to enumeration if device_path doesn't match expected format
+                    cam_ids[device_path] = i
 
         # Only record cameras specified in cam_ids
         recording_queues = {
-            path: queues.recording
-            for path, queues in self._producer_queues.items()
-            if path in cam_ids
+            device_path: queues.recording
+            for device_path, queues in self._queue_bundles.items()
+            if device_path in cam_ids
         }
 
         # Drain excluded recording queues to prevent stale frames
-        for path, queues in self._producer_queues.items():
-            if path not in cam_ids:
+        for device_path, queues in self._queue_bundles.items():
+            if device_path not in cam_ids:
                 while not queues.recording.empty():
                     try:
                         queues.recording.get_nowait()
                     except Empty:
                         break
 
-        self._recording_paths = list(recording_queues.keys())
+        self._recording_device_paths = list(recording_queues.keys())
 
         # Create recorder
         self._frame_recorder = FrameRecorder(
@@ -431,9 +431,9 @@ class CaptureSession:
         self._is_recording.clear()
 
         # Send sentinels only to queues that were recording
-        for path in self._recording_paths:
-            self._producer_queues[path].recording.put(None)
-        self._recording_paths = []
+        for device_path in self._recording_device_paths:
+            self._queue_bundles[device_path].recording.put(None)
+        self._recording_device_paths = []
 
         # Stop recorder (drains queues, finalizes files)
         result = self._frame_recorder.stop()
@@ -478,7 +478,7 @@ class CaptureSession:
                 measured_fps = 0.0
 
             # Alignment queue depth
-            queue_depth = self._producer_queues[device_path].alignment.qsize()
+            queue_depth = self._queue_bundles[device_path].alignment.qsize()
 
             camera_stats[device_path] = CameraStats(
                 device_path=device_path,
@@ -518,22 +518,22 @@ class CaptureSession:
         with ThreadPoolExecutor(max_workers=len(self.sources)) as executor:
             futures = {executor.submit(start_source, s): s for s in self.sources}
             for future in as_completed(futures):
-                path, pts, error = future.result()
+                device_path, pts, error = future.result()
                 if error is not None:
-                    errors.append((path, error))
+                    errors.append((device_path, error))
                 else:
-                    pts_values.append((path, pts))
+                    pts_values.append((device_path, pts))
 
         # If any camera failed to start, stop the ones that did and raise
         if errors:
             for source in self.sources:
                 if source.is_running:
                     source.stop()
-            error_msgs = [f"{path}: {e}" for path, e in errors]
+            error_msgs = [f"{device_path}: {e}" for device_path, e in errors]
             raise CaptureSessionError(f"Failed to start cameras:\n" + "\n".join(error_msgs))
 
         # Validate PTS compatibility
-        pts_cameras = [(path, pts) for path, pts in pts_values if pts is not None]
+        pts_cameras = [(device_path, pts) for device_path, pts in pts_values if pts is not None]
 
         if not pts_cameras:
             logger.warning(

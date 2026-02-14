@@ -3,7 +3,7 @@
 Test script for triple-queue architecture with alignment monitoring.
 
 This script verifies:
-1. ProducerQueues creation and usage
+1. QueueBundle creation and usage
 2. FrameProducer pushing to all three queues
 3. AlignmentMonitor draining alignment queues
 4. CaptureSession integration
@@ -80,7 +80,7 @@ def main():
     print("\nTest 3: Verifying producers push to all queues...")
     time.sleep(2.0)  # Let some frames accumulate
 
-    for device_path, queues in session._producer_queues.items():
+    for device_path, queues in session._queue_bundles.items():
         display_size = queues.display.qsize()
         recording_size = queues.recording.qsize()
         alignment_size = queues.alignment.qsize()

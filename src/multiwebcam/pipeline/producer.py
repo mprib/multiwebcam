@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class ProducerQueues:
+class QueueBundle:
     """Bundle of output queues for a single camera."""
 
     display: Queue[FramePacket]  # maxsize=1, drop-oldest
@@ -37,7 +37,7 @@ class FrameProducer:
     Usage:
         source = FrameSource("/dev/video0")
         is_recording = Event()
-        queues = ProducerQueues(
+        queues = QueueBundle(
             display=Queue(maxsize=1),
             recording=Queue(maxsize=150),
             alignment=Queue(maxsize=150),
@@ -52,7 +52,7 @@ class FrameProducer:
     def __init__(
         self,
         source: FrameSource,
-        queues: ProducerQueues,
+        queues: QueueBundle,
         is_recording: Event,
     ) -> None:
         """
@@ -60,7 +60,7 @@ class FrameProducer:
 
         Args:
             source: FrameSource to capture from
-            queues: ProducerQueues bundle for this camera
+            queues: QueueBundle bundle for this camera
             is_recording: Shared Event flag - only push to recording queue when set
         """
         self.source = source

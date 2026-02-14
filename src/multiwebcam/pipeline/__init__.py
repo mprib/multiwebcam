@@ -46,7 +46,7 @@ Example:
 """
 
 from multiwebcam.pipeline.alignment import AlignmentMonitor, AlignmentStats
-from multiwebcam.pipeline.producer import FrameProducer, ProducerQueues
+from multiwebcam.pipeline.producer import FrameProducer, QueueBundle
 from multiwebcam.pipeline.report import CameraStats
 from multiwebcam.pipeline.session import CaptureSession, CaptureSessionError
 from multiwebcam.recording.recorder import RecordingResult
@@ -58,6 +58,6 @@ __all__ = [
     "CaptureSession",
     "CaptureSessionError",
     "FrameProducer",
-    "ProducerQueues",
+    "QueueBundle",
     "RecordingResult",
 ]
