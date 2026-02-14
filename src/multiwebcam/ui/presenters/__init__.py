@@ -1,9 +1,7 @@
 """Presenters for multiwebcam UI."""
 
-from multiwebcam.ui.presenters.multi_source import MultiSourcePresenter
-from multiwebcam.ui.presenters.single_source import SingleSourcePresenter
+from multiwebcam.ui.presenters.capture import CapturePresenter
 
 __all__ = [
-    "MultiSourcePresenter",
-    "SingleSourcePresenter",
+    "CapturePresenter",
 ]

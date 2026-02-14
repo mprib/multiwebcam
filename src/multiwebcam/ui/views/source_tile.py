@@ -57,3 +57,11 @@ class SourceTile(QFrame):
         """Show error state (e.g., disconnected)."""
         self._frame_label.setText(message)
         self._stats_label.setText("--")
+
+    def set_focus_enabled(self, enabled: bool, reason: str = "") -> None:
+        """Enable/disable focus button. Shows reason text when disabled."""
+        self._focus_btn.setEnabled(enabled)
+        if enabled:
+            self._focus_btn.setText("Focus")
+        elif reason:
+            self._focus_btn.setText(reason)

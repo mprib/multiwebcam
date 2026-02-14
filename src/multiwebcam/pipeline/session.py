@@ -64,7 +64,7 @@ class CaptureSession:
         sources: list[FrameSource],
         enable_monitoring: bool = True,
         monitor_interval_seconds: float = 2.0,
-        recording_buffer_seconds: float = 5.0,
+        recording_buffer_seconds: float = 20.0,
         alignment_window_seconds: float = 3.0,
     ) -> None:
         """
@@ -341,6 +341,15 @@ class CaptureSession:
             return None
 
         return self._alignment_monitor.get_alignment_stats()
+
+    def get_recording_queue_depths(self) -> dict[str, int]:
+        """Recording queue depth per device. Empty dict if not recording."""
+        if not self._is_recording.is_set():
+            return {}
+        return {
+            device_path: self._queue_bundles[device_path].recording.qsize()
+            for device_path in self._recording_device_paths
+        }
 
     def start_recording(self, output_dir: Path, cam_ids: dict[str, int] | None = None) -> None:
         """

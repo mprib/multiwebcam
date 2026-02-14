@@ -195,5 +195,13 @@ class FocusView(QWidget):
         """
         self._record_btn.setEnabled(not recording)
         self._stop_btn.setEnabled(recording)
+        self._stop_btn.setText("Stop")
         self.set_config_enabled(not recording)
         self._back_btn.setEnabled(not recording)
+
+    def set_stopping(self) -> None:
+        """Recording stop in progress -- disable everything interactive."""
+        self._record_btn.setEnabled(False)
+        self._stop_btn.setEnabled(False)
+        self._stop_btn.setText("Stopping...")
+        self._back_btn.setEnabled(False)

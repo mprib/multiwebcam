@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QApplication
 
 from multiwebcam.profiles import SourceProfile
 from multiwebcam.ui import CaptureCoordinator, FocusView, GridView, SourceInfo, SourceTile, frame_to_pixmap
-from multiwebcam.ui.presenters import MultiSourcePresenter, SingleSourcePresenter
+from multiwebcam.ui.presenters import CapturePresenter
 
 
 @pytest.fixture(scope="module")
