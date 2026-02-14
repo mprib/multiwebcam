@@ -101,6 +101,7 @@ class CaptureSession:
         self._running = False
         self._is_recording = Event()  # Shared flag for producers
         self._frame_recorder: FrameRecorder | None = None  # Created on start_recording()
+        self._recording_paths: list[str] = []
 
     def start(self) -> None:
         """Start all producers."""
@@ -372,11 +373,23 @@ class CaptureSession:
                     # Fallback to enumeration if path doesn't match expected format
                     cam_ids[path] = i
 
-        # Extract recording queues
+        # Only record cameras specified in cam_ids
         recording_queues = {
             path: queues.recording
             for path, queues in self._producer_queues.items()
+            if path in cam_ids
         }
+
+        # Drain excluded recording queues to prevent stale frames
+        for path, queues in self._producer_queues.items():
+            if path not in cam_ids:
+                while not queues.recording.empty():
+                    try:
+                        queues.recording.get_nowait()
+                    except Empty:
+                        break
+
+        self._recording_paths = list(recording_queues.keys())
 
         # Create recorder
         self._frame_recorder = FrameRecorder(
@@ -417,9 +430,10 @@ class CaptureSession:
         # Clear flag first (producers stop pushing)
         self._is_recording.clear()
 
-        # Send sentinels to all recording queues
-        for queues in self._producer_queues.values():
-            queues.recording.put(None)
+        # Send sentinels only to queues that were recording
+        for path in self._recording_paths:
+            self._producer_queues[path].recording.put(None)
+        self._recording_paths = []
 
         # Stop recorder (drains queues, finalizes files)
         result = self._frame_recorder.stop()

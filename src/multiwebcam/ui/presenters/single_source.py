@@ -1,5 +1,7 @@
 """Single source presenter for focus mode."""
 
+from pathlib import Path
+
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QPixmap
 
@@ -38,10 +40,15 @@ class SingleSourcePresenter(QObject):
     control_persist_requested = Signal(str, int)  # (control_name, value) for coordinator to persist
     controls_cleared = Signal()               # All controls reset to defaults
 
+    # Recording signals (see also: MultiSourcePresenter for parallel pattern)
+    recording_started = Signal()
+    recording_stopped = Signal()
+
     def __init__(
         self,
         session: CaptureSession,
         device_path: str,
+        source_id: int,
         source_options: FrameSourceOptions | None = None,
         current_config: FrameSourceConfig | None = None,
         poll_ms: int = 33,
@@ -50,6 +57,7 @@ class SingleSourcePresenter(QObject):
         super().__init__(parent)
         self._session = session
         self._device_path = device_path
+        self._source_id = source_id
         self._source_options = source_options
         self._current_config = current_config
         self._poll_ms = poll_ms
@@ -76,6 +84,8 @@ class SingleSourcePresenter(QObject):
         """Stop presenting - resumes all sources, stops polling."""
         if not self._active:
             return
+        if self._session.is_recording:
+            self.stop_recording()
         self._timer.stop()
         self._session.resume_all()
         self._active = False
@@ -171,3 +181,16 @@ class SingleSourcePresenter(QObject):
                 set_control(self._device_path, ctrl.name, ctrl.default)
         self.controls_cleared.emit()
         self._emit_controls()
+
+    def start_recording(self, output_dir: Path) -> None:
+        """Start recording from this source only."""
+        # See also: MultiSourcePresenter.start_recording (parallel pattern)
+        cam_ids = {self._device_path: self._source_id}
+        self._session.start_recording(output_dir, cam_ids=cam_ids)
+        self.recording_started.emit()
+
+    def stop_recording(self) -> None:
+        """Stop recording."""
+        result = self._session.stop_recording()
+        if result:
+            self.recording_stopped.emit()

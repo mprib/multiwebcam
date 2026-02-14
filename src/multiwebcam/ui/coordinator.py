@@ -217,6 +217,7 @@ class CaptureCoordinator(QObject):
         presenter = SingleSourcePresenter(
             self._session,
             info.device_path,
+            source_id=source_id,
             source_options=info.options,
             current_config=config,
         )
@@ -262,6 +263,15 @@ class CaptureCoordinator(QObject):
         presenter.controls_cleared.connect(
             lambda: self._on_controls_cleared(source_id)
         )
+
+        # Wire recording
+        output_dir = self._project_path / "calibration" / "intrinsic"
+        view.record_requested.connect(
+            lambda: presenter.start_recording(output_dir)
+        )
+        view.stop_requested.connect(presenter.stop_recording)
+        presenter.recording_started.connect(lambda: view.set_recording(True))
+        presenter.recording_stopped.connect(lambda: view.set_recording(False))
 
         return view, presenter
 

@@ -33,6 +33,8 @@ class FocusView(QWidget):
     back_requested = Signal()
     resolution_selected = Signal(str)
     apply_requested = Signal()
+    record_requested = Signal()
+    stop_requested = Signal()
 
     def __init__(self, source_id: int, label: str, parent=None):
         super().__init__(parent)
@@ -72,6 +74,15 @@ class FocusView(QWidget):
         self._apply_btn = QPushButton("Apply")
         self._panel_layout.addWidget(self._apply_btn)
 
+        # Recording buttons
+        recording_layout = QHBoxLayout()
+        self._record_btn = QPushButton("Record")
+        self._stop_btn = QPushButton("Stop")
+        self._stop_btn.setEnabled(False)
+        recording_layout.addWidget(self._record_btn)
+        recording_layout.addWidget(self._stop_btn)
+        self._panel_layout.addLayout(recording_layout)
+
         # Separator spacing
         self._panel_layout.addSpacing(20)
 
@@ -93,6 +104,8 @@ class FocusView(QWidget):
         # Wire up signals
         self._resolution_combo.currentTextChanged.connect(self.resolution_selected.emit)
         self._apply_btn.clicked.connect(self.apply_requested.emit)
+        self._record_btn.clicked.connect(self.record_requested.emit)
+        self._stop_btn.clicked.connect(self.stop_requested.emit)
         self._back_btn.clicked.connect(self.back_requested.emit)
 
     @property
@@ -173,3 +186,14 @@ class FocusView(QWidget):
     def control_panel(self) -> ControlPanel | None:
         """The embedded control panel, or None if not yet created."""
         return self._control_panel
+
+    def set_recording(self, recording: bool) -> None:
+        """Update UI state for recording mode.
+
+        During recording: disable config controls, record, and back.
+        Control panel stays functional (adjust exposure mid-recording).
+        """
+        self._record_btn.setEnabled(not recording)
+        self._stop_btn.setEnabled(recording)
+        self.set_config_enabled(not recording)
+        self._back_btn.setEnabled(not recording)
