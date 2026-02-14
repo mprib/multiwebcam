@@ -243,17 +243,24 @@ class CaptureCoordinator(QObject):
         # Wire V4L2 controls
         presenter.controls_ready.connect(view.set_controls)
 
-        # Control changes flow: view panel -> presenter -> device + persist
-        # We wire this lazily since the control panel doesn't exist until controls_ready fires
+        # Wire control panel signals each time controls_ready fires.
+        # set_controls() replaces the ControlPanel widget, so old connections
+        # die with the old widget and we must connect the new one.
         def _wire_control_panel(controls) -> None:
             if view.control_panel is not None:
                 view.control_panel.control_changed.connect(presenter.on_control_changed)
+                view.control_panel.defaults_restore_requested.connect(presenter.on_restore_defaults)
 
         presenter.controls_ready.connect(_wire_control_panel)
 
         # Persist control changes to profile
         presenter.control_persist_requested.connect(
             lambda name, value: self._on_control_persist(source_id, name, value)
+        )
+
+        # When controls are cleared, remove them from profile
+        presenter.controls_cleared.connect(
+            lambda: self._on_controls_cleared(source_id)
         )
 
         return view, presenter
@@ -281,6 +288,15 @@ class CaptureCoordinator(QObject):
             max=ctrl_max,
         )
         updated_profile = info.profile.with_control(name, control_value)
+        self._repo.save(updated_profile)
+        info.profile = updated_profile
+
+    def _on_controls_cleared(self, source_id: int) -> None:
+        """Clear all saved controls from profile."""
+        info = self._sources.get(source_id)
+        if not info:
+            return
+        updated_profile = info.profile.with_controls_cleared()
         self._repo.save(updated_profile)
         info.profile = updated_profile
 

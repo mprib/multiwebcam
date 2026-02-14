@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
     QLabel,
+    QPushButton,
     QScrollArea,
     QSlider,
     QSpinBox,
@@ -29,9 +30,11 @@ class ControlPanel(QWidget):
     Signals:
         control_changed: Emitted when any control value changes.
                         Args: (control_name: str, value: int)
+        defaults_restore_requested: Emitted when Restore Defaults button clicked.
     """
 
     control_changed = Signal(str, int)
+    defaults_restore_requested = Signal()
 
     def __init__(self, controls: list[V4L2Control], parent=None):
         super().__init__(parent)
@@ -73,6 +76,11 @@ class ControlPanel(QWidget):
                 widget = self._create_control_widget(control)
                 if widget:
                     form_layout.addRow(label_text, widget)
+
+            # Add Restore Defaults button
+            restore_btn = QPushButton("Restore Defaults")
+            restore_btn.clicked.connect(self.defaults_restore_requested.emit)
+            scroll_layout.addWidget(restore_btn)
 
         scroll_layout.addStretch()
         scroll_area.setWidget(scroll_content)

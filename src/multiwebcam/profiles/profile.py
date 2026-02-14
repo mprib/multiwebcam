@@ -89,3 +89,7 @@ class SourceProfile:
         """Return new profile with added/updated control."""
         new_controls = {**self.controls, name: control}
         return dataclasses.replace(self, controls=new_controls)
+
+    def with_controls_cleared(self) -> SourceProfile:
+        """Return new profile with all controls removed."""
+        return dataclasses.replace(self, controls={})

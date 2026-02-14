@@ -5,7 +5,7 @@ from PySide6.QtGui import QPixmap
 
 from multiwebcam.pipeline.session import CaptureSession
 from multiwebcam.sources.config import FrameSourceConfig
-from multiwebcam.sources.controls import query_controls, set_control
+from multiwebcam.sources.controls import V4L2Control, query_controls, set_control
 from multiwebcam.sources.discovery import FrameSourceOptions
 from multiwebcam.ui.conversion import frame_to_pixmap
 
@@ -36,6 +36,7 @@ class SingleSourcePresenter(QObject):
     # V4L2 control signals
     controls_ready = Signal(object)           # list[V4L2Control]
     control_persist_requested = Signal(str, int)  # (control_name, value) for coordinator to persist
+    controls_cleared = Signal()               # All controls reset to defaults
 
     def __init__(
         self,
@@ -55,6 +56,7 @@ class SingleSourcePresenter(QObject):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_poll)
         self._active = False
+        self._current_controls: list[V4L2Control] = []
 
     def activate(self) -> None:
         """Start presenting - pauses other sources, starts polling."""
@@ -154,9 +156,18 @@ class SingleSourcePresenter(QObject):
         """Query V4L2 controls for this device and emit them."""
         controls = query_controls(self._device_path)
         if controls:
+            self._current_controls = controls
             self.controls_ready.emit(controls)
 
     def on_control_changed(self, name: str, value: int) -> None:
         """Handle control change from UI — apply to device and request persistence."""
         if set_control(self._device_path, name, value):
             self.control_persist_requested.emit(name, value)
+
+    def on_restore_defaults(self) -> None:
+        """Reset all V4L2 controls to hardware defaults and refresh UI."""
+        for ctrl in self._current_controls:
+            if ctrl.default is not None:
+                set_control(self._device_path, ctrl.name, ctrl.default)
+        self.controls_cleared.emit()
+        self._emit_controls()
