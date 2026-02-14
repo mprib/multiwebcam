@@ -100,6 +100,7 @@ class CapturePresenter(QObject):
 
         self._stop_worker: _StopRecordingWorker | None = None
         self._recording_start_time: float | None = None
+        self._recording_device_paths: list[str] = []
 
     @property
     def focused_device_path(self) -> str | None:
@@ -166,6 +167,7 @@ class CapturePresenter(QObject):
                 cam_ids = dict(self._source_id_lookup.items())
 
         self._session.start_recording(output_dir, cam_ids=cam_ids)
+        self._recording_device_paths = list(cam_ids.keys())
         self._recording_start_time = time.monotonic()
         self.recording_started.emit()
 
@@ -186,6 +188,7 @@ class CapturePresenter(QObject):
         if self._stop_worker is not None:
             self._stop_worker.wait()
             self._stop_worker = None
+        self._recording_device_paths = []
         self._recording_start_time = None
         self.recording_stopped.emit()
 
@@ -243,21 +246,28 @@ class CapturePresenter(QObject):
             self.focus_stats_updated.emit(stats[self._focused_device_path])
 
     def _poll_recording(self) -> None:
-        if not self._session.is_recording:
+        """Emit recording signals. Works during both recording and drain."""
+        is_recording = self._session.is_recording
+        is_draining = self._stop_worker is not None
+
+        if not is_recording and not is_draining:
             return
 
-        if self._recording_start_time is not None:
+        # Duration (only while actively recording, not during drain)
+        if is_recording and self._recording_start_time is not None:
             elapsed = time.monotonic() - self._recording_start_time
             self.recording_duration.emit(elapsed)
 
-        depths = self._session.get_recording_queue_depths()
-        if depths:
-            depths_by_id = {
-                self._source_id_lookup[p]: d
-                for p, d in depths.items()
-                if p in self._source_id_lookup
-            }
-            self.recording_queue_depth.emit(depths_by_id)
+        # Queue depths (during recording AND drain)
+        if self._recording_device_paths:
+            depths = self._session.get_queue_sizes(self._recording_device_paths)
+            if depths:
+                depths_by_id = {
+                    self._source_id_lookup[p]: d
+                    for p, d in depths.items()
+                    if p in self._source_id_lookup
+                }
+                self.recording_queue_depth.emit(depths_by_id)
 
     # --- Focus mode capabilities ---
 

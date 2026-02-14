@@ -50,7 +50,6 @@ class GridView(QWidget):
         self._stop_btn = QPushButton("Stop")
         self._stop_btn.setEnabled(False)
         self._duration_label = QLabel("00:00:00")
-        self._queue_label = QLabel("")
 
         self._record_btn.clicked.connect(self.record_requested.emit)
         self._stop_btn.clicked.connect(self.stop_requested.emit)
@@ -59,8 +58,6 @@ class GridView(QWidget):
         controls.addWidget(self._stop_btn)
         controls.addStretch()
         controls.addWidget(self._duration_label)
-        controls.addSpacing(16)
-        controls.addWidget(self._queue_label)
         controls.addSpacing(16)
         controls.addWidget(QLabel("Refresh:"))
         self._fps_combo = QComboBox()
@@ -118,8 +115,8 @@ class GridView(QWidget):
             tile.set_focus_enabled(
                 not is_recording, reason="Recording..." if is_recording else ""
             )
+            tile.set_queue_visible(is_recording)
         if not is_recording:
-            self._queue_label.setText("")
             self._duration_label.setText("00:00:00")
 
     def set_stopping(self) -> None:
@@ -137,13 +134,12 @@ class GridView(QWidget):
         self._duration_label.setText(f"{h:02d}:{m:02d}:{s:02d}")
 
     def update_queue_depth(self, depths: dict[int, int]) -> None:
-        """Update recording queue depth display."""
-        total = sum(depths.values())
-        if total == 0:
-            self._queue_label.setText("")
-        elif total < 30:
-            self._queue_label.setText(f"Queue: {total}")
-            self._queue_label.setStyleSheet("")
-        else:
-            self._queue_label.setText(f"Queue: {total} (backlog)")
-            self._queue_label.setStyleSheet("color: #FFA000;")
+        """Update per-camera queue depth display."""
+        for source_id, tile in self._tiles.items():
+            depth = depths.get(source_id, 0)
+            tile.set_queue_depth(depth)
+
+    def set_tile_resolution(self, source_id: int, resolution: str) -> None:
+        """Set resolution label for a tile."""
+        if source_id in self._tiles:
+            self._tiles[source_id].set_resolution(resolution)

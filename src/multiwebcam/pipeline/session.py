@@ -342,13 +342,12 @@ class CaptureSession:
 
         return self._alignment_monitor.get_alignment_stats()
 
-    def get_recording_queue_depths(self) -> dict[str, int]:
-        """Recording queue depth per device. Empty dict if not recording."""
-        if not self._is_recording.is_set():
-            return {}
+    def get_queue_sizes(self, device_paths: list[str]) -> dict[str, int]:
+        """Queue sizes for given device paths. Works regardless of recording state."""
         return {
-            device_path: self._queue_bundles[device_path].recording.qsize()
-            for device_path in self._recording_device_paths
+            path: self._queue_bundles[path].recording.qsize()
+            for path in device_paths
+            if path in self._queue_bundles
         }
 
     def start_recording(self, output_dir: Path, cam_ids: dict[str, int] | None = None) -> None:

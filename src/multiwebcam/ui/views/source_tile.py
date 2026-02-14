@@ -2,9 +2,13 @@
 
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from multiwebcam.ui.views.aspect_ratio_label import AspectRatioLabel
+
+_QUEUE_DEPTH_WARNING = 30  # frames (~1s at 30fps)
+_COLOR_WARNING = "#FFA000"
+_STYLE_MUTED = "font-size: 10px; color: #888888;"
 
 
 class SourceTile(QFrame):
@@ -24,11 +28,24 @@ class SourceTile(QFrame):
         self._frame_label = AspectRatioLabel()
         self._frame_label.setMinimumSize(320, 240)
 
-        # Source label
+        # Source label + resolution on one line
         self._name_label = QLabel(label)
+        self._resolution_label = QLabel("")
+        self._resolution_label.setStyleSheet("color: #AAAAAA;")
+
+        info_row = QHBoxLayout()
+        info_row.addWidget(self._name_label)
+        info_row.addStretch()
+        info_row.addWidget(self._resolution_label)
 
         # Stats label
         self._stats_label = QLabel("-- fps")
+
+        # Queue depth label (hidden when not recording)
+        self._queue_label = QLabel("Unsaved frames: 0")
+        self._queue_label.setVisible(False)
+        self._queue_label.setStyleSheet(_STYLE_MUTED)
+        self._queue_warning = False
 
         # Focus button
         self._focus_btn = QPushButton("Focus")
@@ -36,9 +53,12 @@ class SourceTile(QFrame):
 
         # Layout
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(2)
         layout.addWidget(self._frame_label)
-        layout.addWidget(self._name_label)
+        layout.addLayout(info_row)
         layout.addWidget(self._stats_label)
+        layout.addWidget(self._queue_label)
         layout.addWidget(self._focus_btn)
 
     @property
@@ -52,6 +72,28 @@ class SourceTile(QFrame):
     def update_stats(self, fps: float, jitter_ms: float = 0.0) -> None:
         """Update stats display."""
         self._stats_label.setText(f"{fps:.1f} fps | {jitter_ms:.1f}ms jitter")
+
+    def set_queue_visible(self, visible: bool) -> None:
+        """Show/hide queue label based on recording state."""
+        self._queue_label.setVisible(visible)
+        if not visible:
+            self._queue_label.setText("Unsaved frames: 0")
+            if self._queue_warning:
+                self._queue_label.setStyleSheet(_STYLE_MUTED)
+                self._queue_warning = False
+
+    def set_queue_depth(self, depth: int) -> None:
+        """Update unsaved frame count. Does not change visibility."""
+        self._queue_label.setText(f"Unsaved frames: {depth}")
+        warning = depth >= _QUEUE_DEPTH_WARNING
+        if warning != self._queue_warning:
+            color = _COLOR_WARNING if warning else "#888888"
+            self._queue_label.setStyleSheet(f"font-size: 10px; color: {color};")
+            self._queue_warning = warning
+
+    def set_resolution(self, resolution: str) -> None:
+        """Show camera resolution (e.g., '1920x1080')."""
+        self._resolution_label.setText(resolution)
 
     def set_error(self, message: str) -> None:
         """Show error state (e.g., disconnected)."""

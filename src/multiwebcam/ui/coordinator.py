@@ -165,6 +165,8 @@ class CaptureCoordinator(QObject):
         for source_id, info in self._sources.items():
             if info.device_path and not info.error:
                 view.add_source(source_id, info.profile.label)
+                w, h = info.profile.resolution
+                view.set_tile_resolution(source_id, f"{w}x{h}")
 
         p = self._presenter
 
