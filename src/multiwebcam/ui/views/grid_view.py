@@ -3,6 +3,7 @@
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QGridLayout,
     QHBoxLayout,
@@ -25,16 +26,21 @@ class GridView(QWidget):
         record_requested: User clicked record button
         stop_requested: User clicked stop button
         poll_interval_changed(int): User changed poll interval (milliseconds)
+        ignore_toggled(int, bool): User toggled ignore for a source (source_id, ignored)
+        mirror_toggled(bool): User toggled horizontal flip
     """
 
     focus_requested = Signal(int)  # source_id
     record_requested = Signal()
     stop_requested = Signal()
     poll_interval_changed = Signal(int)  # milliseconds
+    mirror_toggled = Signal(bool)
+    ignore_toggled = Signal(int, bool)  # source_id, ignored
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._tiles: dict[int, SourceTile] = {}
+        self._ignored_source_ids: set[int] = set()
 
         # Main layout
         main_layout = QVBoxLayout(self)
@@ -65,6 +71,10 @@ class GridView(QWidget):
         self._fps_combo.setCurrentText("30 fps")
         self._fps_combo.currentTextChanged.connect(self._on_fps_changed)
         controls.addWidget(self._fps_combo)
+        controls.addSpacing(16)
+        self._mirror_cb = QCheckBox("Mirror")
+        self._mirror_cb.toggled.connect(self.mirror_toggled.emit)
+        controls.addWidget(self._mirror_cb)
         main_layout.addLayout(controls)
 
         # Status bar
@@ -75,16 +85,32 @@ class GridView(QWidget):
         fps = int(text.split()[0])
         self.poll_interval_changed.emit(1000 // fps)
 
-    def add_source(self, source_id: int, label: str) -> None:
+    def add_source(self, source_id: int, label: str, ignore: bool = False) -> None:
         """Add a source tile to the grid."""
-        tile = SourceTile(source_id, label)
+        tile = SourceTile(source_id, label, ignore=ignore)
         tile.focus_requested.connect(lambda sid=source_id: self.focus_requested.emit(sid))
+        tile.ignore_toggled.connect(lambda ignored, sid=source_id: self._on_tile_ignore_toggled(sid, ignored))
         self._tiles[source_id] = tile
+        if ignore:
+            self._ignored_source_ids.add(source_id)
+            self._update_record_enabled()
 
         # Arrange in grid (3 columns)
         idx = len(self._tiles) - 1
         row, col = divmod(idx, 3)
         self._grid_layout.addWidget(tile, row, col)
+
+    def _on_tile_ignore_toggled(self, source_id: int, ignored: bool) -> None:
+        if ignored:
+            self._ignored_source_ids.add(source_id)
+        else:
+            self._ignored_source_ids.discard(source_id)
+        self._update_record_enabled()
+        self.ignore_toggled.emit(source_id, ignored)
+
+    def _update_record_enabled(self) -> None:
+        all_ignored = self._tiles and len(self._ignored_source_ids) >= len(self._tiles)
+        self._record_btn.setEnabled(not all_ignored)
 
     def display_frames(self, frames: dict[int, QPixmap]) -> None:
         """Update frames for multiple sources."""
@@ -111,11 +137,14 @@ class GridView(QWidget):
         self._record_btn.setEnabled(not is_recording)
         self._stop_btn.setEnabled(is_recording)
         self._stop_btn.setText("Stop")
-        for tile in self._tiles.values():
+        for source_id, tile in self._tiles.items():
             tile.set_focus_enabled(
                 not is_recording, reason="Recording..." if is_recording else ""
             )
-            tile.set_queue_visible(is_recording)
+            if is_recording and source_id not in self._ignored_source_ids:
+                tile.set_queue_visible(True)
+            else:
+                tile.set_queue_visible(False)
         if not is_recording:
             self._duration_label.setText("00:00:00")
 
@@ -126,6 +155,7 @@ class GridView(QWidget):
         self._stop_btn.setText("Stopping...")
         for tile in self._tiles.values():
             tile.set_focus_enabled(False, reason="Stopping...")
+            tile.set_ignore_enabled(False)
 
     def update_duration(self, seconds: float) -> None:
         """Update recording duration display."""
@@ -138,6 +168,12 @@ class GridView(QWidget):
         for source_id, tile in self._tiles.items():
             depth = depths.get(source_id, 0)
             tile.set_queue_depth(depth)
+
+    def set_mirror(self, enabled: bool) -> None:
+        """Set mirror checkbox state without triggering signal."""
+        self._mirror_cb.blockSignals(True)
+        self._mirror_cb.setChecked(enabled)
+        self._mirror_cb.blockSignals(False)
 
     def set_tile_resolution(self, source_id: int, resolution: str) -> None:
         """Set resolution label for a tile."""

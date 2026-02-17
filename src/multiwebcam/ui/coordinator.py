@@ -103,6 +103,7 @@ class CaptureCoordinator(QObject):
         if self._session:
             self._apply_saved_controls()
             self._session.start()
+            self._pause_ignored_producers()
 
     def stop(self) -> None:
         """Stop presenter and session."""
@@ -130,6 +131,21 @@ class CaptureCoordinator(QObject):
     def get_device_path(self, source_id: int) -> str | None:
         info = self._sources.get(source_id)
         return info.device_path if info and not info.error else None
+
+    def _pause_ignored_producers(self) -> None:
+        """Pause producers for cameras marked as ignored in their profile.
+
+        Silently skips devices whose producers haven't been created yet
+        (e.g. when called before session.start()).
+        """
+        if self._session is None:
+            return
+        for info in self._sources.values():
+            if info.profile.ignore and info.device_path and not info.error:
+                try:
+                    self._session.pause_producer(info.device_path)
+                except ValueError:
+                    pass
 
     def _apply_saved_controls(self) -> None:
         for info in self._sources.values():
@@ -164,7 +180,7 @@ class CaptureCoordinator(QObject):
         view = GridView(parent)
         for source_id, info in self._sources.items():
             if info.device_path and not info.error:
-                view.add_source(source_id, info.profile.label)
+                view.add_source(source_id, info.profile.label, ignore=info.profile.ignore)
                 w, h = info.profile.resolution
                 view.set_tile_resolution(source_id, f"{w}x{h}")
 
@@ -183,13 +199,29 @@ class CaptureCoordinator(QObject):
         self._connect(p.recording_started, rec_true)
         self._connect(p.recording_stopped, rec_false)
 
+        self._connect(view.ignore_toggled, self._on_ignore_toggled)
+
+        view.set_mirror(p.mirror)
+        self._connect(view.mirror_toggled, p.set_mirror)
+
         # Wire view -> presenter (view owns these, die with view)
         output_dir = self._project_path / "recordings"
-        view.record_requested.connect(lambda: p.start_recording(output_dir))
+
+        def _on_record():
+            cam_ids = {
+                info.device_path: info.source_id
+                for info in self._sources.values()
+                if info.device_path and not info.error and not info.profile.ignore
+            }
+            if cam_ids:
+                p.start_recording(output_dir, cam_ids=cam_ids)
+
+        view.record_requested.connect(_on_record)
         view.stop_requested.connect(p.stop_recording)
         view.poll_interval_changed.connect(p.set_grid_poll_interval)
 
         p.enter_grid_mode()
+        self._pause_ignored_producers()
         return view
 
     def create_focus_view(self, source_id: int, parent=None):
@@ -252,6 +284,7 @@ class CaptureCoordinator(QObject):
         p.enter_focus_mode(
             info.device_path, source_id, info.options, config,
         )
+        self._pause_ignored_producers()
         return view
 
     def _on_control_persist(self, source_id: int, name: str, value: int) -> None:
@@ -285,8 +318,25 @@ class CaptureCoordinator(QObject):
         self._repo.save(updated_profile)
         info.profile = updated_profile
 
+    def _on_ignore_toggled(self, source_id: int, ignore: bool) -> None:
+        info = self._sources.get(source_id)
+        if not info or info.error or not info.device_path:
+            return
+        updated_profile = info.profile.with_ignore(ignore)
+        self._repo.save(updated_profile)
+        info.profile = updated_profile
+        if self._session is None:
+            return
+        if ignore:
+            self._session.pause_producer(info.device_path)
+        else:
+            self._session.resume_producer(info.device_path)
+
     def _on_apply_config(self, view) -> None:
         """Handle Apply button -- change source configuration."""
+        if self._presenter is None or self._session is None:
+            return
+
         resolution = view.selected_resolution
         framerate = view.selected_framerate
 
@@ -301,9 +351,8 @@ class CaptureCoordinator(QObject):
         )
 
         device_path = self._presenter.focused_device_path
-
-        if self._session is None:
-            self._presenter.apply_config_error("No capture session active")
+        if device_path is None:
+            self._presenter.apply_config_error("No focused device")
             return
 
         try:

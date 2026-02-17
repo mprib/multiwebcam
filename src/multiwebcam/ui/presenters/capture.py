@@ -98,6 +98,8 @@ class CapturePresenter(QObject):
         self._current_config: FrameSourceConfig | None = None
         self._current_controls: list[V4L2Control] = []
 
+        self._mirror: bool = False
+
         self._stop_worker: _StopRecordingWorker | None = None
         self._recording_start_time: float | None = None
         self._recording_device_paths: list[str] = []
@@ -109,6 +111,13 @@ class CapturePresenter(QObject):
     @property
     def focused_source_id(self) -> int | None:
         return self._focused_source_id
+
+    @property
+    def mirror(self) -> bool:
+        return self._mirror
+
+    def set_mirror(self, enabled: bool) -> None:
+        self._mirror = enabled
 
     @property
     def mode(self) -> str:
@@ -217,7 +226,7 @@ class CapturePresenter(QObject):
         for device_path, packet in frames.items():
             if packet is not None and device_path in self._source_id_lookup:
                 source_id = self._source_id_lookup[device_path]
-                pixmaps[source_id] = frame_to_pixmap(packet.frame)
+                pixmaps[source_id] = frame_to_pixmap(packet.frame, mirror=self._mirror)
         if pixmaps:
             self.frames_ready.emit(pixmaps)
 
@@ -239,7 +248,7 @@ class CapturePresenter(QObject):
         frames = self._session.get_latest_frames()
         packet = frames.get(self._focused_device_path)
         if packet is not None:
-            self.frame_ready.emit(frame_to_pixmap(packet.frame))
+            self.frame_ready.emit(frame_to_pixmap(packet.frame, mirror=self._mirror))
 
         stats = self._session.get_camera_stats()
         if stats and self._focused_device_path in stats:

@@ -4,15 +4,15 @@ import numpy as np
 from PySide6.QtGui import QImage, QPixmap
 
 
-def frame_to_pixmap(frame: np.ndarray) -> QPixmap:
+def frame_to_pixmap(frame: np.ndarray, mirror: bool = False) -> QPixmap:
     """Convert BGR numpy array to QPixmap for display.
 
     Args:
         frame: BGR image array, shape (H, W, 3), dtype uint8
-
-    Returns:
-        QPixmap ready for display in Qt widgets
+        mirror: If True, flip horizontally before conversion
     """
+    if mirror:
+        frame = frame[:, ::-1, :]
     height, width, channels = frame.shape
     bytes_per_line = channels * width
     # Convert BGR to RGB for Qt

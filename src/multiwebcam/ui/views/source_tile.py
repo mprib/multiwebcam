@@ -2,7 +2,15 @@
 
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QFrame,
+    QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+)
 
 from multiwebcam.ui.views.aspect_ratio_label import AspectRatioLabel
 
@@ -16,13 +24,16 @@ class SourceTile(QFrame):
 
     Signals:
         focus_requested: Emitted when user clicks focus button
+        ignore_toggled(bool): Emitted when user toggles the ignore checkbox
     """
 
     focus_requested = Signal()  # User wants to focus this source
+    ignore_toggled = Signal(bool)
 
-    def __init__(self, source_id: int, label: str, parent=None):
+    def __init__(self, source_id: int, label: str, ignore: bool = False, parent=None):
         super().__init__(parent)
         self._source_id = source_id
+        self._ignored = ignore
 
         # Frame display
         self._frame_label = AspectRatioLabel()
@@ -33,9 +44,14 @@ class SourceTile(QFrame):
         self._resolution_label = QLabel("")
         self._resolution_label.setStyleSheet("color: #AAAAAA;")
 
+        self._ignore_cb = QCheckBox("Ignore")
+        self._ignore_cb.setChecked(ignore)
+        self._ignore_cb.toggled.connect(self._on_ignore_toggled)
+
         info_row = QHBoxLayout()
         info_row.addWidget(self._name_label)
         info_row.addStretch()
+        info_row.addWidget(self._ignore_cb)
         info_row.addWidget(self._resolution_label)
 
         # Stats label
@@ -50,6 +66,16 @@ class SourceTile(QFrame):
         # Focus button
         self._focus_btn = QPushButton("Focus")
         self._focus_btn.clicked.connect(self.focus_requested.emit)
+
+        # Opacity effect for dimming when ignored
+        self._opacity_effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self._opacity_effect)
+        self._apply_dim(ignore)
+        if ignore:
+            self._frame_label.setText("Camera Ignored")
+            self._frame_label.setStyleSheet(
+                "background-color: #333333; color: #888888; font-size: 14px;"
+            )
 
         # Layout
         layout = QVBoxLayout(self)
@@ -66,7 +92,9 @@ class SourceTile(QFrame):
         return self._source_id
 
     def display_frame(self, pixmap: QPixmap) -> None:
-        """Update the displayed frame."""
+        """Update the displayed frame. No-op when ignored."""
+        if self._ignored:
+            return
         self._frame_label.display_pixmap(pixmap)
 
     def update_stats(self, fps: float, jitter_ms: float = 0.0) -> None:
@@ -103,7 +131,29 @@ class SourceTile(QFrame):
     def set_focus_enabled(self, enabled: bool, reason: str = "") -> None:
         """Enable/disable focus button. Shows reason text when disabled."""
         self._focus_btn.setEnabled(enabled)
+        self._ignore_cb.setEnabled(enabled)
         if enabled:
             self._focus_btn.setText("Focus")
         elif reason:
             self._focus_btn.setText(reason)
+
+    def set_ignore_enabled(self, enabled: bool) -> None:
+        """Enable/disable the ignore checkbox."""
+        self._ignore_cb.setEnabled(enabled)
+
+    def _on_ignore_toggled(self, checked: bool) -> None:
+        self._ignored = checked
+        if checked:
+            self._frame_label.clear()
+            self._frame_label.setText("Camera Ignored")
+            self._frame_label.setStyleSheet(
+                "background-color: #333333; color: #888888; font-size: 14px;"
+            )
+        else:
+            self._frame_label.setText("")
+            self._frame_label.setStyleSheet("background-color: black;")
+        self.ignore_toggled.emit(checked)
+        self._apply_dim(checked)
+
+    def _apply_dim(self, dim: bool) -> None:
+        self._opacity_effect.setOpacity(0.5 if dim else 1.0)
