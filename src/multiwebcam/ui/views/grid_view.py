@@ -1,13 +1,16 @@
 """Grid view showing all sources simultaneously."""
 
 from PySide6.QtCore import Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QRegularExpressionValidator
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -15,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from multiwebcam.pipeline.alignment import AlignmentStats
 from multiwebcam.pipeline.report import CameraStats
+from multiwebcam.ui.recording_intent import GridRecordingIntent
 from multiwebcam.ui.views.source_tile import SourceTile
 
 
@@ -23,19 +27,21 @@ class GridView(QWidget):
 
     Signals:
         focus_requested(int): User wants to focus source with given source_id
-        record_requested: User clicked record button
+        record_requested(object): User clicked record button; emits GridRecordingIntent
         stop_requested: User clicked stop button
         poll_interval_changed(int): User changed poll interval (milliseconds)
         ignore_toggled(int, bool): User toggled ignore for a source (source_id, ignored)
         mirror_toggled(bool): User toggled horizontal flip
+        open_folder_requested: User clicked Open Folder button
     """
 
     focus_requested = Signal(int)  # source_id
-    record_requested = Signal()
+    record_requested = Signal(object)  # GridRecordingIntent
     stop_requested = Signal()
     poll_interval_changed = Signal(int)  # milliseconds
     mirror_toggled = Signal(bool)
     ignore_toggled = Signal(int, bool)  # source_id, ignored
+    open_folder_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -50,6 +56,47 @@ class GridView(QWidget):
         self._grid_layout = QGridLayout(self._grid_widget)
         main_layout.addWidget(self._grid_widget, stretch=1)
 
+        # Horizontal separator between grid and controls
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        main_layout.addWidget(separator)
+
+        # Destination row (above action controls)
+        dest_row = QHBoxLayout()
+
+        self._extrinsic_cb = QCheckBox("Extrinsic Calibration")
+        dest_row.addWidget(self._extrinsic_cb)
+
+        dest_row.addSpacing(16)
+
+        self._name_label = QLabel("Recording name:")
+        self._name_label.setStyleSheet("color: gray;")
+        dest_row.addWidget(self._name_label)
+
+        self._name_input = QLineEdit("recording_001")
+        self._name_input.setMinimumWidth(160)
+        self._name_input.setMaximumWidth(240)
+        self._name_input.setValidator(
+            QRegularExpressionValidator(r"[\w\-]+", self._name_input)
+        )
+        dest_row.addWidget(self._name_input)
+
+        self._dest_summary = QLabel("")
+        self._dest_summary.setStyleSheet("color: gray; font-style: italic;")
+        dest_row.addWidget(self._dest_summary)
+
+        dest_row.addStretch()
+
+        self._open_folder_btn = QPushButton("Open Folder")
+        self._open_folder_btn.setFlat(True)
+        self._open_folder_btn.setStyleSheet(
+            "color: #4A9EFF; text-decoration: underline;"
+        )
+        dest_row.addWidget(self._open_folder_btn)
+
+        main_layout.addLayout(dest_row)
+
         # Recording controls
         controls = QHBoxLayout()
         self._record_btn = QPushButton("Record")
@@ -57,7 +104,7 @@ class GridView(QWidget):
         self._stop_btn.setEnabled(False)
         self._duration_label = QLabel("00:00:00")
 
-        self._record_btn.clicked.connect(self.record_requested.emit)
+        self._record_btn.clicked.connect(self._on_record_clicked)
         self._stop_btn.clicked.connect(self.stop_requested.emit)
 
         controls.addWidget(self._record_btn)
@@ -80,6 +127,13 @@ class GridView(QWidget):
         # Status bar
         self._status_label = QLabel("Ready")
         main_layout.addWidget(self._status_label)
+
+        # Wire destination controls
+        self._extrinsic_cb.toggled.connect(self._on_extrinsic_toggled)
+        self._name_input.textChanged.connect(self._update_dest_summary)
+        self._open_folder_btn.clicked.connect(self.open_folder_requested.emit)
+
+        self._update_dest_summary()
 
     def _on_fps_changed(self, text: str) -> None:
         fps = int(text.split()[0])
@@ -112,6 +166,46 @@ class GridView(QWidget):
         all_ignored = self._tiles and len(self._ignored_source_ids) >= len(self._tiles)
         self._record_btn.setEnabled(not all_ignored)
 
+    def _on_extrinsic_toggled(self, checked: bool) -> None:
+        """Hide/show name label and input based on extrinsic checkbox."""
+        self._name_label.setVisible(not checked)
+        self._name_input.setVisible(not checked)
+        self._update_dest_summary()
+
+    def _on_record_clicked(self) -> None:
+        """Construct GridRecordingIntent from widget state and emit record_requested."""
+        intent = GridRecordingIntent(
+            is_extrinsic=self._extrinsic_cb.isChecked(),
+            recording_name=self._name_input.text(),
+        )
+        self.record_requested.emit(intent)
+
+    def _update_dest_summary(self) -> None:
+        """Update the destination summary label based on current widget state."""
+        if self._extrinsic_cb.isChecked():
+            self._dest_summary.setText("-> calibration/extrinsic/")
+        else:
+            name = self._name_input.text() or "untitled"
+            self._dest_summary.setText(f"-> recordings/{name}/")
+
+    def set_default_recording_name(self, name: str) -> None:
+        """Set the recording name line edit text without triggering signals."""
+        self._name_input.blockSignals(True)
+        self._name_input.setText(name)
+        self._name_input.blockSignals(False)
+        self._update_dest_summary()
+
+    def confirm_overwrite(self, display_name: str) -> bool:
+        """Ask user to confirm overwriting an existing destination."""
+        result = QMessageBox.question(
+            self,
+            "Overwrite existing recording?",
+            f"'{display_name}' already contains files.\n\nOverwrite?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return result == QMessageBox.StandardButton.Yes
+
     def display_frames(self, frames: dict[int, QPixmap]) -> None:
         """Update frames for multiple sources."""
         for source_id, pixmap in frames.items():
@@ -134,9 +228,15 @@ class GridView(QWidget):
 
     def set_recording(self, is_recording: bool) -> None:
         """Update UI for recording state."""
-        self._record_btn.setEnabled(not is_recording)
+        if not is_recording:
+            self._update_record_enabled()
+        else:
+            self._record_btn.setEnabled(False)
         self._stop_btn.setEnabled(is_recording)
         self._stop_btn.setText("Stop")
+        self._extrinsic_cb.setEnabled(not is_recording)
+        self._name_input.setEnabled(not is_recording)
+        self._open_folder_btn.setEnabled(not is_recording)
         for source_id, tile in self._tiles.items():
             tile.set_focus_enabled(
                 not is_recording, reason="Recording..." if is_recording else ""
@@ -153,6 +253,9 @@ class GridView(QWidget):
         self._record_btn.setEnabled(False)
         self._stop_btn.setEnabled(False)
         self._stop_btn.setText("Stopping...")
+        self._extrinsic_cb.setEnabled(False)
+        self._name_input.setEnabled(False)
+        self._open_folder_btn.setEnabled(False)
         for tile in self._tiles.values():
             tile.set_focus_enabled(False, reason="Stopping...")
             tile.set_ignore_enabled(False)
