@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QObject
+
+from multiwebcam.recording.naming import next_recording_name
+from multiwebcam.ui.recording_intent import GridRecordingIntent
 
 from multiwebcam.pipeline.session import CaptureSession
 from multiwebcam.profiles import ControlValue, ProfileRepository, SourceProfile
@@ -14,6 +18,14 @@ from multiwebcam.sources import FrameSource, FrameSourceConfig, FrameSourceOptio
 from multiwebcam.sources.controls import set_control
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_recording_name(raw: str) -> str:
+    """Sanitize user input to a safe filesystem name."""
+    name = raw.strip()
+    name = re.sub(r'[^\w\-]', '_', name)
+    name = name.lstrip('-')
+    return name or "untitled"
 
 
 @dataclass
@@ -184,6 +196,9 @@ class CaptureCoordinator(QObject):
                 w, h = info.profile.resolution
                 view.set_tile_resolution(source_id, f"{w}x{h}")
 
+        recordings_dir = self._project_path / "recordings"
+        view.set_default_recording_name(next_recording_name(recordings_dir))
+
         p = self._presenter
 
         # Wire presenter -> view
@@ -195,9 +210,13 @@ class CaptureCoordinator(QObject):
         self._connect(p.recording_duration, view.update_duration)
 
         rec_true = lambda: view.set_recording(True)
-        rec_false = lambda: view.set_recording(False)
+
+        def _on_recording_stopped():
+            view.set_recording(False)
+            view.set_default_recording_name(next_recording_name(recordings_dir))
+
         self._connect(p.recording_started, rec_true)
-        self._connect(p.recording_stopped, rec_false)
+        self._connect(p.recording_stopped, _on_recording_stopped)
 
         self._connect(view.ignore_toggled, self._on_ignore_toggled)
 
@@ -205,9 +224,18 @@ class CaptureCoordinator(QObject):
         self._connect(view.mirror_toggled, p.set_mirror)
 
         # Wire view -> presenter (view owns these, die with view)
-        output_dir = self._project_path / "recordings"
+        def _on_record(intent: GridRecordingIntent):
+            if intent.is_extrinsic:
+                output_dir = self._project_path / "calibration" / "extrinsic"
+            else:
+                name = _sanitize_recording_name(intent.recording_name)
+                output_dir = self._project_path / "recordings" / name
 
-        def _on_record():
+            if output_dir.exists() and any(output_dir.iterdir()):
+                relative = str(output_dir.relative_to(self._project_path))
+                if not view.confirm_overwrite(relative):
+                    return
+
             cam_ids = {
                 info.device_path: info.source_id
                 for info in self._sources.values()
@@ -219,6 +247,13 @@ class CaptureCoordinator(QObject):
         view.record_requested.connect(_on_record)
         view.stop_requested.connect(p.stop_recording)
         view.poll_interval_changed.connect(p.set_grid_poll_interval)
+
+        def _on_open_folder():
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._project_path)))
+
+        view.open_folder_requested.connect(_on_open_folder)
 
         p.enter_grid_mode()
         self._pause_ignored_producers()
