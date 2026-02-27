@@ -9,7 +9,7 @@ from pathlib import Path
 from queue import Queue
 
 from multiwebcam.recording.encoder import CameraEncoder
-from multiwebcam.recording.frametimes import FrametimesCollector
+from multiwebcam.recording.timestamps import TimestampCollector
 from multiwebcam.sources.frame_packet import FramePacket
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class RecordingResult:
     frames_per_camera: dict[int, int]  # cam_id -> frame count
     duration_seconds: float
     errors: list[str]  # Any non-fatal errors encountered
-    frametimes_path: Path  # Path to frametimes.csv
+    timestamps_path: Path  # Path to timestamps.csv
 
 
 class FrameRecorder:
@@ -71,7 +71,7 @@ class FrameRecorder:
 
         Args:
             recording_queues: Per-camera recording queues (device_path -> queue)
-            output_dir: Directory to write MP4 files and frametimes.csv
+            output_dir: Directory to write MP4 files and timestamps.csv
             cam_ids: Device path to integer cam_id mapping
             codec: Video codec (default "h264")
         """
@@ -81,7 +81,7 @@ class FrameRecorder:
         self.codec = codec
 
         self._encoders: list[CameraEncoder] = []
-        self._frametimes_collector = FrametimesCollector()
+        self._timestamp_collector = TimestampCollector()
         self._start_time: float | None = None
         self._running = False
 
@@ -129,7 +129,7 @@ class FrameRecorder:
                 queue=queue,
                 output_path=output_path,
                 codec=self.codec,
-                timestamp_callback=self._frametimes_collector.add_frametime,
+                timestamp_callback=self._timestamp_collector.add_timestamp,
             )
             self._encoders.append(encoder)
 
@@ -163,7 +163,7 @@ class FrameRecorder:
                 frames_per_camera={},
                 duration_seconds=0.0,
                 errors=["Recording was not active"],
-                frametimes_path=self.output_dir / "frametimes.csv",
+                timestamps_path=self.output_dir / "timestamps.csv",
             )
 
         logger.info("Stopping recording, draining encoder queues...")
@@ -187,12 +187,12 @@ class FrameRecorder:
             frames_per_camera[encoder.cam_id] = encoder.frames_written
             all_errors.extend(encoder.errors)
 
-        # Write frametimes.csv
-        frametimes_path = self.output_dir / "frametimes.csv"
+        # Write timestamps.csv
+        timestamps_path = self.output_dir / "timestamps.csv"
         try:
-            self._frametimes_collector.write_csv(frametimes_path)
+            self._timestamp_collector.write_csv(timestamps_path)
         except Exception as e:
-            error_msg = f"Failed to write frametimes.csv: {e}"
+            error_msg = f"Failed to write timestamps.csv: {e}"
             logger.error(error_msg, exc_info=True)
             all_errors.append(error_msg)
 
@@ -203,7 +203,7 @@ class FrameRecorder:
             frames_per_camera=frames_per_camera,
             duration_seconds=duration,
             errors=all_errors,
-            frametimes_path=frametimes_path,
+            timestamps_path=timestamps_path,
         )
 
         logger.info(

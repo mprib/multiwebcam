@@ -24,7 +24,7 @@ class CameraEncoder:
     gets its own encoder thread that:
     1. Drains frames from the recording queue
     2. Encodes to MP4 via PyAV
-    3. Reports timestamps to FrametimesCollector
+    3. Reports timestamps to TimestampCollector
     4. Exits when sentinel (None) is received
 
     The encoder runs in its own daemon thread.
