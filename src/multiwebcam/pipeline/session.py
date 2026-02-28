@@ -355,7 +355,7 @@ class CaptureSession:
         Begin recording all cameras to output_dir.
 
         Args:
-            output_dir: Directory for MP4 files and frametimes.csv
+            output_dir: Directory for MP4 files and timestamps.csv
             cam_ids: Optional mapping of device_path -> cam_id for filenames.
                     If None, auto-assigns based on device_id from path
                     (e.g., /dev/video0 -> 0, /dev/video2 -> 1)
@@ -422,7 +422,7 @@ class CaptureSession:
         The recording process:
         1. Clear is_recording flag (producers stop pushing)
         2. Send sentinel (None) to each recording queue
-        3. Recorder drains queues and finalizes MP4 + frametimes.csv
+        3. Recorder drains queues and finalizes MP4 + timestamps.csv
         """
         if not self._is_recording.is_set():
             logger.warning("Not recording, nothing to stop")

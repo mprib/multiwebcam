@@ -8,7 +8,7 @@ Multi-camera capture and recording for USB webcams on Linux. Output feeds into [
 
 Captures video from multiple USB webcams simultaneously, recording to individual MP4 files with accurate timestamps. Each camera gets:
 - `cam_N.mp4` - H.264 encoded video
-- `cam_N_frametimes.csv` - Frame timestamps for temporal alignment
+- `timestamps.csv` - Combined frame timestamps for temporal alignment (all cameras)
 
 This is **not** hardware-synchronized capture. Consumer USB webcams have no genlock. We capture independently and record timestamps so Caliscope can align frames temporally (typical precision: 10-50ms).
 
@@ -63,9 +63,8 @@ your_project/
 ├── multiwebcam.toml      # Camera configuration
 └── recordings/
     ├── cam_0.mp4
-    ├── cam_0_frametimes.csv
     ├── cam_1.mp4
-    ├── cam_1_frametimes.csv
+    ├── timestamps.csv     # Combined timestamps for all cameras
     └── ...
 ```
 

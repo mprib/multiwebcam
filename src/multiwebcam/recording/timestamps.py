@@ -1,4 +1,4 @@
-"""Frametimes collection and CSV writing for recordings."""
+"""Timestamp collection and CSV writing for recordings."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class FrametimeEntry:
+class TimestampEntry:
     """A single frame's timestamp metadata."""
 
     cam_id: int
@@ -21,7 +21,7 @@ class FrametimeEntry:
     frame_time: float
 
 
-class FrametimesCollector:
+class TimestampCollector:
     """
     Thread-safe collector for frame timestamps during recording.
 
@@ -29,21 +29,21 @@ class FrametimesCollector:
     stops, the collector writes all timestamps to CSV in a single atomic operation.
 
     Usage:
-        collector = FrametimesCollector()
+        collector = TimestampCollector()
 
         # From encoder threads
-        collector.add_frametime(cam_id=0, frame_index=0, frame_time=1234.567)
-        collector.add_frametime(cam_id=1, frame_index=0, frame_time=1234.568)
+        collector.add_timestamp(cam_id=0, frame_index=0, frame_time=1234.567)
+        collector.add_timestamp(cam_id=1, frame_index=0, frame_time=1234.568)
 
         # On recording stop
-        collector.write_csv(output_dir / "frametimes.csv")
+        collector.write_csv(output_dir / "timestamps.csv")
     """
 
     def __init__(self) -> None:
-        self._entries: list[FrametimeEntry] = []
+        self._entries: list[TimestampEntry] = []
         self._lock = Lock()
 
-    def add_frametime(
+    def add_timestamp(
         self,
         cam_id: int,
         frame_index: int,
@@ -59,7 +59,7 @@ class FrametimesCollector:
             frame_index: Per-camera sequential frame index
             frame_time: Timestamp in seconds
         """
-        entry = FrametimeEntry(
+        entry = TimestampEntry(
             cam_id=cam_id,
             frame_index=frame_index,
             frame_time=frame_time,
@@ -80,28 +80,28 @@ class FrametimesCollector:
         Sorts entries by (cam_id, frame_index) before writing.
 
         Args:
-            output_path: Path to write frametimes.csv
+            output_path: Path to write timestamps.csv
         """
         with self._lock:
             # Sort by cam_id, then frame index for deterministic output
             sorted_entries = sorted(self._entries, key=lambda e: (e.cam_id, e.frame_index))
 
-        write_frametimes_csv(sorted_entries, output_path)
-        logger.info(f"Wrote {len(sorted_entries)} frametimes to {output_path}")
+        write_timestamps_csv(sorted_entries, output_path)
+        logger.info(f"Wrote {len(sorted_entries)} timestamps to {output_path}")
 
     @property
     def frame_count(self) -> int:
-        """Total number of frametimes collected."""
+        """Total number of timestamps collected."""
         with self._lock:
             return len(self._entries)
 
 
-def write_frametimes_csv(entries: list[FrametimeEntry], output_path: Path) -> None:
+def write_timestamps_csv(entries: list[TimestampEntry], output_path: Path) -> None:
     """
-    Write frametime entries to CSV file.
+    Write timestamp entries to CSV file.
 
     Args:
-        entries: List of FrametimeEntry to write
+        entries: List of TimestampEntry to write
         output_path: Path to output CSV file
     """
     with open(output_path, "w", newline="") as f:
